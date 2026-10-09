@@ -52,6 +52,14 @@ namespace StellarDriveDemoTF
             {
                 Log.Error("could not register infinite parts: " + e);
             }
+            try
+            {
+                Chairs.ChairParts.Register();
+            }
+            catch (Exception e)
+            {
+                Log.Error("could not register chairs: " + e);
+            }
         }
 
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)

@@ -35,6 +35,11 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
     (thrusters, other tanks) without end;
   - infinite resource chest: iron, glass, copper, aluminum, wood, ice, biofuel, water and stellar
     shards that refill as you take them; the last slot is a bin.
+- **Chairs** (needs SDModKit), in a "TF Sièges" build tab: rustic chair, futuristic seat, copilot
+  seat, club armchair, bar stool, bench, office chair and shuttle passenger seat. They are built
+  on the game's pilot seat, so you sit in them the same way. Only the copilot seat flies the ship;
+  the others ignore flight controls and never act as a gyroscope or set the flight orientation.
+  Paint them to change their color.
 - **Mirrors** (needs SDModKit): rear-view mirror and wall mirror with real-time planar reflections.
   Only the nearest mirrors in view refresh (`MirrorMaxActive`, default 2), at a capped rate
   (`MirrorFps`, 30), reflecting up to `MirrorFarClip` meters (80), with an image sized to how big
