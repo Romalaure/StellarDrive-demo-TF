@@ -27,9 +27,16 @@ namespace StellarDriveDemoTF.Lights
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
 
+        // Brightness against the surroundings: brighter in the dark, softer in open daylight
+        private const float DarkBoost = 1.4f;
+        private const float DaylightDim = 0.4f;
+
         private Light _light;
         private Renderer[] _diffusers;
         private float _baseIntensity;
+        private float _baseRange;
+        private float _environment = 1f;
+        private float _nextEnvironmentCheck;
         private MaterialPropertyBlock _block;
 
         private bool _hasContext;
@@ -45,6 +52,7 @@ namespace StellarDriveDemoTF.Lights
             Transform lightObject = transform.Find(LightName);
             _light = lightObject != null ? lightObject.GetComponent<Light>() : null;
             _baseIntensity = _light != null ? _light.intensity : 0f;
+            _baseRange = _light != null ? _light.range : 0f;
             Transform diffuser = transform.Find(DiffuserName);
             _diffusers = diffuser != null ? diffuser.GetComponents<Renderer>() : new Renderer[0];
             // Build menu previews have no context: show the lamp lit, without casting light
@@ -83,10 +91,35 @@ namespace StellarDriveDemoTF.Lights
                 level = Mathf.Clamp01((float)Math.Abs(_signal));
 
             Color color = PaintNet.Client.TryGet(_key, out PaintData paint) ? (Color)paint.Color : LampCatalog.DefaultLight;
-            if (Mathf.Approximately(level, _shownLevel) && color == _shownColor)
+
+            bool environmentChanged = UpdateEnvironment();
+            if (!environmentChanged && Mathf.Approximately(level, _shownLevel) && color == _shownColor)
                 return;
             Apply(level, color, castLight: true);
         }
+
+        // Eases the lamp toward the brightness its surroundings call for
+        private bool UpdateEnvironment()
+        {
+            if (!Settings.AdaptiveLamps.Value)
+            {
+                bool changed = !Mathf.Approximately(_environment, 1f);
+                _environment = 1f;
+                return changed;
+            }
+            if (Time.unscaledTime >= _nextEnvironmentCheck)
+            {
+                _nextEnvironmentCheck = Time.unscaledTime + 0.5f + UnityEngine.Random.value * 0.2f;
+                _targetEnvironment = Mathf.Lerp(DarkBoost, DaylightDim, EnvironmentLight.Daylight(transform.position));
+            }
+            float next = Mathf.MoveTowards(_environment, _targetEnvironment, 0.25f);
+            if (Mathf.Approximately(next, _environment))
+                return false;
+            _environment = next;
+            return true;
+        }
+
+        private float _targetEnvironment = 1f;
 
         private void Apply(float level, Color color, bool castLight)
         {
@@ -95,14 +128,16 @@ namespace StellarDriveDemoTF.Lights
             if (_light != null && castLight)
             {
                 _light.enabled = level > 0.001f;
-                _light.intensity = _baseIntensity * level;
+                _light.intensity = _baseIntensity * level * _environment;
+                _light.range = _baseRange * Mathf.Lerp(0.85f, 1.15f, Mathf.InverseLerp(DaylightDim, DarkBoost, _environment));
                 _light.color = color;
             }
             foreach (Renderer renderer in _diffusers)
             {
                 renderer.GetPropertyBlock(_block);
                 _block.SetColor(BaseColorId, Color.Lerp(new Color(0.35f, 0.36f, 0.38f), color, level));
-                _block.SetColor(EmissionColorId, color * (3f * level));
+                // The diffuser glows harder in daylight so the lamp still reads as lit
+                _block.SetColor(EmissionColorId, color * (3f * level * Mathf.Lerp(1.6f, 1f, Mathf.InverseLerp(DaylightDim, DarkBoost, _environment))));
                 renderer.SetPropertyBlock(_block);
             }
         }

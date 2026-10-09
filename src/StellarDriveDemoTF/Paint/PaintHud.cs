@@ -1,29 +1,32 @@
-using Core.Services;
 using Players.Interface.Services;
 using StellarDriveDemoTF.Common;
-using UI.Interface.Services;
 using UnityEngine;
 
 namespace StellarDriveDemoTF.Paint
 {
     /// <summary>
-    /// Paint HUD. While the paint tool is held, a compact card shows the current paint and target.
-    /// While the game's paint menu is open (right click), a side panel adds faces, finish, quick
-    /// colors and presets next to the game's own hue/saturation/value pickers.
+    /// Paint HUD, replacing the game's paint menu. While the paint tool is held a small card shows
+    /// the current paint and target; right click opens one panel with the color picker
+    /// (saturation/value square and hue bar), quick colors, hex input, wall side mode, finish and
+    /// presets. The game's menu still opens underneath (it frees the cursor and pauses the tool)
+    /// but is hidden.
     /// </summary>
     internal static class PaintHud
     {
         public static bool ToolActive;
         public static bool MenuOpen;
 
-        private const float PanelWidth = 380f;
-        private const float CardWidth = 330f;
+        private const float PanelWidth = 452f;
+        private const float CardWidth = 300f;
+        private const int PickerSize = 176;
 
-        private static readonly Color Background = new Color(0.07f, 0.08f, 0.1f, 0.92f);
-        private static readonly Color Section = new Color(0.12f, 0.13f, 0.16f, 0.95f);
-        private static readonly Color Accent = new Color(0.96f, 0.47f, 0.08f);
-        private static readonly Color TextColor = new Color(0.92f, 0.93f, 0.95f);
-        private static readonly Color MutedText = new Color(0.62f, 0.65f, 0.7f);
+        private static readonly Color Panel = new Color(0.075f, 0.08f, 0.1f, 0.94f);
+        private static readonly Color Card = new Color(0.13f, 0.14f, 0.17f, 1f);
+        private static readonly Color Chip = new Color(0.18f, 0.19f, 0.23f, 1f);
+        private static readonly Color ChipHover = new Color(0.25f, 0.27f, 0.32f, 1f);
+        private static readonly Color Accent = new Color(0.98f, 0.5f, 0.12f);
+        private static readonly Color TextColor = new Color(0.93f, 0.94f, 0.96f);
+        private static readonly Color MutedText = new Color(0.6f, 0.63f, 0.69f);
 
         private static readonly Color[] QuickColors =
         {
@@ -39,32 +42,28 @@ namespace StellarDriveDemoTF.Paint
             ("Mat", PaintFinish.Of(0.05f, 0f, 0f)),
             ("Satiné", PaintFinish.Of(0.45f, 0f, 0f)),
             ("Brillant", PaintFinish.Of(0.92f, 0f, 0f)),
-            ("Métal brossé", PaintFinish.Of(0.45f, 1f, 0f)),
+            ("Brossé", PaintFinish.Of(0.45f, 1f, 0f)),
             ("Chrome", PaintFinish.Of(0.97f, 1f, 0f)),
             ("Néon", PaintFinish.Of(0.6f, 0f, 0.7f))
         };
 
-        private static Texture2D _white;
-        private static GUIStyle _title, _label, _muted, _big, _button, _selectedButton, _field, _box;
+        private enum Drag { None, SaturationValue, Hue }
+
+        private static Texture2D _white, _hueBar, _svSquare;
+        private static GUIStyle _panelStyle, _cardStyle, _chipStyle, _chipActiveStyle, _swatchFrame;
+        private static GUIStyle _title, _section, _label, _muted, _big, _field, _toggle;
         private static Vector2 _presetScroll;
         private static string _hexInput = "";
         private static string _presetName = "";
-        private static bool _refreshGameMenu;
         private static bool _finishDirty;
+
+        private static float _hue, _saturation, _value;
+        private static Color _syncedColor = new Color(-1f, 0f, 0f);
+        private static float _svTextureHue = -1f;
+        private static Drag _drag;
 
         public static void Update()
         {
-            if (_refreshGameMenu)
-            {
-                _refreshGameMenu = false;
-                // The game's menu reads the selection only when it opens
-                var activator = ServiceLocator.GetService<IPaintMenuActivator>();
-                if (activator != null && MenuOpen)
-                {
-                    activator.Close();
-                    activator.Open();
-                }
-            }
             if (_finishDirty && !MenuOpen)
             {
                 _finishDirty = false;
@@ -87,6 +86,7 @@ namespace StellarDriveDemoTF.Paint
             float width = Screen.width / scale;
             float height = Screen.height / scale;
 
+            SyncHsv(selection.SelectedPaintColor);
             if (MenuOpen)
                 DrawPanel(selection, width, height);
             else
@@ -95,159 +95,265 @@ namespace StellarDriveDemoTF.Paint
             GUI.matrix = previous;
         }
 
+        // ---- Compact card ----
+
         private static void DrawCard(IPlayerPaintToolSelectionTracker selection, float width, float height)
         {
-            var rect = new Rect(width - CardWidth - 24f, height - 236f, CardWidth, 200f);
-            Fill(rect, Background);
-            Fill(new Rect(rect.x, rect.y, rect.width, 3f), Accent);
+            var rect = new Rect(width - CardWidth - 28f, height - 214f, CardWidth, 178f);
+            GUI.Box(rect, GUIContent.none, _panelStyle);
+            Fill(new Rect(rect.x + 14f, rect.y, 46f, 3f), Accent);
 
-            GUILayout.BeginArea(new Rect(rect.x + 14f, rect.y + 12f, rect.width - 28f, rect.height - 20f));
-            GUILayout.Label("PINCEAU TF", _title);
+            GUILayout.BeginArea(new Rect(rect.x + 16f, rect.y + 12f, rect.width - 32f, rect.height - 22f));
+            GUILayout.Label("PINCEAU", _title);
+            GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
-            Rect swatch = GUILayoutUtility.GetRect(64f, 64f, GUILayout.Width(64f), GUILayout.Height(64f));
+            Rect swatch = GUILayoutUtility.GetRect(58f, 58f, GUILayout.Width(58f), GUILayout.Height(58f));
             DrawSwatch(swatch, selection.SelectedPaintColor, PaintBrush.Finish);
             GUILayout.Space(12f);
             GUILayout.BeginVertical();
             GUILayout.Label("#" + ColorUtility.ToHtmlStringRGB(selection.SelectedPaintColor), _big);
-            GUILayout.Label(FinishText(PaintBrush.Finish), _label);
-            GUILayout.Label(selection.PaintBothSides ? "Murs : les deux faces" : "Murs : face visée seulement", _label);
-            if (selection.ReplaceAllIdenticalColors)
-                GUILayout.Label("Remplace toutes les zones identiques", _label);
+            GUILayout.Label(FinishText(PaintBrush.Finish), _muted);
+            GUILayout.Label(selection.PaintBothSides ? "Murs : deux faces" : "Murs : face visée", _muted);
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
             GUILayout.FlexibleSpace();
-            GUILayout.Label(TargetText(), _muted);
-            GUILayout.Label("Clic G peindre · Clic D menu · Molette pipette", _muted);
+            GUILayout.Label(TargetText(), _label);
+            GUILayout.Label("Clic G peindre  ·  Clic D palette  ·  Molette pipette", _muted);
             GUILayout.EndArea();
         }
 
+        // ---- Full panel ----
+
         private static void DrawPanel(IPlayerPaintToolSelectionTracker selection, float width, float height)
         {
-            var rect = new Rect(width - PanelWidth - 24f, 40f, PanelWidth, height - 80f);
-            Fill(rect, Background);
-            Fill(new Rect(rect.x, rect.y, rect.width, 3f), Accent);
+            float panelHeight = Mathf.Min(height - 60f, 860f);
+            var rect = new Rect(width - PanelWidth - 28f, (height - panelHeight) / 2f, PanelWidth, panelHeight);
+            GUI.Box(rect, GUIContent.none, _panelStyle);
+            Fill(new Rect(rect.x + 18f, rect.y, 60f, 3f), Accent);
 
-            GUILayout.BeginArea(new Rect(rect.x + 14f, rect.y + 12f, rect.width - 28f, rect.height - 24f));
+            GUILayout.BeginArea(new Rect(rect.x + 18f, rect.y + 14f, rect.width - 36f, rect.height - 28f));
+            GUILayout.BeginHorizontal();
             GUILayout.Label("PINCEAU TF", _title);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("clic droit pour fermer", _muted);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(8f);
 
-            // Current paint
+            DrawPicker(selection);
+            GUILayout.Space(10f);
+            DrawQuickColors(selection);
+            DrawSides(selection);
+            DrawFinish();
+            DrawPresets(selection);
+
+            GUILayout.EndArea();
+        }
+
+        private static void DrawPicker(IPlayerPaintToolSelectionTracker selection)
+        {
             GUILayout.BeginHorizontal();
-            Rect swatch = GUILayoutUtility.GetRect(72f, 72f, GUILayout.Width(72f), GUILayout.Height(72f));
-            DrawSwatch(swatch, selection.SelectedPaintColor, PaintBrush.Finish);
-            GUILayout.Space(12f);
+            Rect sv = GUILayoutUtility.GetRect(PickerSize, PickerSize, GUILayout.Width(PickerSize), GUILayout.Height(PickerSize));
+            GUILayout.Space(10f);
+            Rect hue = GUILayoutUtility.GetRect(20f, PickerSize, GUILayout.Width(20f), GUILayout.Height(PickerSize));
+            GUILayout.Space(14f);
+
             GUILayout.BeginVertical();
-            GUILayout.Label("#" + ColorUtility.ToHtmlStringRGB(selection.SelectedPaintColor), _big);
-            GUILayout.Label(FinishText(PaintBrush.Finish), _label);
+            Rect preview = GUILayoutUtility.GetRect(150f, 74f, GUILayout.ExpandWidth(true), GUILayout.Height(74f));
+            DrawSwatch(preview, selection.SelectedPaintColor, PaintBrush.Finish);
+            GUILayout.Space(8f);
+            Color32 rgb = selection.SelectedPaintColor;
+            GUILayout.Label($"R {rgb.r}   G {rgb.g}   B {rgb.b}", _muted);
+            GUILayout.Label($"T {Mathf.RoundToInt(_hue * 360f)}°   S {Mathf.RoundToInt(_saturation * 100f)}%   L {Mathf.RoundToInt(_value * 100f)}%", _muted);
+            GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
-            _hexInput = GUILayout.TextField(_hexInput, 7, _field, GUILayout.Width(110f));
-            if (GUILayout.Button("Appliquer #", _button, GUILayout.Width(110f)) && ColorUtility.TryParseHtmlString(Hex(_hexInput), out Color typed))
+            _hexInput = GUILayout.TextField(_hexInput, 7, _field, GUILayout.Height(26f));
+            if (GUILayout.Button("OK", _chipStyle, GUILayout.Width(44f), GUILayout.Height(26f)) && ColorUtility.TryParseHtmlString(Hex(_hexInput), out Color typed))
                 SetColor(selection, typed);
             GUILayout.EndHorizontal();
             GUILayout.EndVertical();
             GUILayout.EndHorizontal();
 
-            // Quick colors
-            SectionHeader("Couleurs rapides");
+            // Saturation (x) / value (y) square for the current hue, and the hue bar
+            UpdateSvTexture();
+            GUI.DrawTexture(sv, _svSquare);
+            GUI.DrawTexture(hue, _hueBar);
+            DrawRing(new Vector2(sv.x + _saturation * sv.width, sv.y + (1f - _value) * sv.height));
+            Fill(new Rect(hue.x - 3f, hue.y + (1f - _hue) * hue.height - 2f, hue.width + 6f, 4f), Color.white);
+
+            HandlePickerInput(selection, sv, hue);
+        }
+
+        private static void HandlePickerInput(IPlayerPaintToolSelectionTracker selection, Rect sv, Rect hue)
+        {
+            Event e = Event.current;
+            if (e.type == EventType.MouseDown && e.button == 0)
+            {
+                if (sv.Contains(e.mousePosition))
+                    _drag = Drag.SaturationValue;
+                else if (hue.Contains(e.mousePosition))
+                    _drag = Drag.Hue;
+            }
+            if (_drag != Drag.None && (e.type == EventType.MouseDown || e.type == EventType.MouseDrag))
+            {
+                if (_drag == Drag.SaturationValue)
+                {
+                    _saturation = Mathf.Clamp01((e.mousePosition.x - sv.x) / sv.width);
+                    _value = Mathf.Clamp01(1f - (e.mousePosition.y - sv.y) / sv.height);
+                }
+                else
+                {
+                    _hue = Mathf.Clamp01(1f - (e.mousePosition.y - hue.y) / hue.height);
+                }
+                Color color = Color.HSVToRGB(_hue, _saturation, _value);
+                selection.SelectedPaintColor = color;
+                _syncedColor = color;
+                _hexInput = "#" + ColorUtility.ToHtmlStringRGB(color);
+                e.Use();
+            }
+            if (e.rawType == EventType.MouseUp)
+                _drag = Drag.None;
+        }
+
+        private static void DrawQuickColors(IPlayerPaintToolSelectionTracker selection)
+        {
             for (int row = 0; row < QuickColors.Length / 8; row++)
             {
                 GUILayout.BeginHorizontal();
                 for (int col = 0; col < 8; col++)
                 {
                     Color color = QuickColors[row * 8 + col];
-                    Rect cell = GUILayoutUtility.GetRect(36f, 28f, GUILayout.Width(36f), GUILayout.Height(28f));
-                    Fill(cell, color);
+                    Rect cell = GUILayoutUtility.GetRect(44f, 26f, GUILayout.Width(44f), GUILayout.Height(26f));
+                    GUI.Box(cell, GUIContent.none, _swatchFrame);
+                    Fill(new Rect(cell.x + 2f, cell.y + 2f, cell.width - 4f, cell.height - 4f), color);
                     if (GUI.Button(cell, GUIContent.none, GUIStyle.none))
                         SetColor(selection, color);
+                    if (col < 7)
+                        GUILayout.Space(5f);
                 }
                 GUILayout.EndHorizontal();
+                GUILayout.Space(5f);
             }
+        }
 
-            // Faces
+        private static void DrawSides(IPlayerPaintToolSelectionTracker selection)
+        {
             SectionHeader("Murs et sols");
             GUILayout.BeginHorizontal();
-            if (GUILayout.Button("Face visée", selection.PaintBothSides ? _button : _selectedButton))
-                SetBothSides(selection, false);
-            if (GUILayout.Button("Les deux faces", selection.PaintBothSides ? _selectedButton : _button))
-                SetBothSides(selection, true);
+            if (GUILayout.Button("Face visée", selection.PaintBothSides ? _chipStyle : _chipActiveStyle, GUILayout.Height(28f)))
+                selection.PaintBothSides = false;
+            GUILayout.Space(6f);
+            if (GUILayout.Button("Les deux faces", selection.PaintBothSides ? _chipActiveStyle : _chipStyle, GUILayout.Height(28f)))
+                selection.PaintBothSides = true;
             GUILayout.EndHorizontal();
-            bool replace = GUILayout.Toggle(selection.ReplaceAllIdenticalColors, " Remplacer toutes les zones de la même couleur");
-            if (replace != selection.ReplaceAllIdenticalColors)
-            {
-                selection.ReplaceAllIdenticalColors = replace;
-                _refreshGameMenu = true;
-            }
-            GUILayout.Label("Face visée : peins un côté, retourne-toi et peins l'autre d'une autre couleur.", _muted);
+            GUILayout.Space(4f);
+            selection.ReplaceAllIdenticalColors = GUILayout.Toggle(selection.ReplaceAllIdenticalColors, "  Remplacer toute la même couleur", _toggle);
+            GUILayout.Label("Face visée : peins un côté, retourne-toi, peins l'autre d'une autre couleur.", _muted);
+        }
 
-            // Finish
-            SectionHeader("Finition (portes, machines, pièces)");
+        private static void DrawFinish()
+        {
+            SectionHeader("Finition — portes, machines, pièces");
             for (int start = 0; start < QuickFinishes.Length; start += 4)
             {
                 GUILayout.BeginHorizontal();
                 for (int i = start; i < Mathf.Min(start + 4, QuickFinishes.Length); i++)
                 {
                     bool active = PaintBrush.Finish.Equals(QuickFinishes[i].Finish);
-                    if (GUILayout.Button(QuickFinishes[i].Name, active ? _selectedButton : _button))
+                    if (GUILayout.Button(QuickFinishes[i].Name, active ? _chipActiveStyle : _chipStyle, GUILayout.Height(26f)))
                         SetFinish(QuickFinishes[i].Finish);
+                    if (i < start + 3)
+                        GUILayout.Space(5f);
                 }
                 GUILayout.EndHorizontal();
+                GUILayout.Space(5f);
             }
-            PaintFinish finish = PaintBrush.Finish;
-            float gloss = Slider("Brillance", finish.Enabled ? finish.GlossValue : 0.5f);
-            float metal = Slider("Métal", finish.Enabled ? finish.MetalValue : 0f);
-            float glow = Slider("Lumineux", finish.Enabled ? finish.GlowValue : 0f);
-            if (finish.Enabled
-                ? (!Mathf.Approximately(gloss, finish.GlossValue) || !Mathf.Approximately(metal, finish.MetalValue) || !Mathf.Approximately(glow, finish.GlowValue))
-                : (!Mathf.Approximately(gloss, 0.5f) || metal > 0f || glow > 0f))
-            {
-                SetFinish(PaintFinish.Of(gloss, metal, glow));
-            }
-            GUILayout.Label("Les murs et sols gardent leur aspect : le jeu ne gère que leur couleur.", _muted);
 
-            // Presets
+            PaintFinish finish = PaintBrush.Finish;
+            float gloss = Slider("Brillance", finish.Enabled ? finish.GlossValue : 0.5f, finish.Enabled);
+            float metal = Slider("Métal", finish.Enabled ? finish.MetalValue : 0f, finish.Enabled);
+            float glow = Slider("Lumineux", finish.Enabled ? finish.GlowValue : 0f, finish.Enabled);
+            bool moved = finish.Enabled
+                ? !Mathf.Approximately(gloss, finish.GlossValue) || !Mathf.Approximately(metal, finish.MetalValue) || !Mathf.Approximately(glow, finish.GlowValue)
+                : !Mathf.Approximately(gloss, 0.5f) || metal > 0f || glow > 0f;
+            if (moved)
+                SetFinish(PaintFinish.Of(gloss, metal, glow));
+        }
+
+        private static void DrawPresets(IPlayerPaintToolSelectionTracker selection)
+        {
             SectionHeader("Préréglages");
             GUILayout.BeginHorizontal();
-            _presetName = GUILayout.TextField(_presetName, 24, _field);
-            if (GUILayout.Button("Enregistrer", _button, GUILayout.Width(110f)))
+            _presetName = GUILayout.TextField(_presetName, 24, _field, GUILayout.Height(26f));
+            GUILayout.Space(6f);
+            if (GUILayout.Button("+ Enregistrer", _chipActiveStyle, GUILayout.Width(118f), GUILayout.Height(26f)))
             {
                 PaintBrush.AddPreset(_presetName);
                 _presetName = "";
             }
             GUILayout.EndHorizontal();
+            GUILayout.Space(6f);
 
-            _presetScroll = GUILayout.BeginScrollView(_presetScroll, GUILayout.ExpandHeight(true));
+            _presetScroll = GUILayout.BeginScrollView(_presetScroll, GUIStyle.none, GUI.skin.verticalScrollbar, GUILayout.ExpandHeight(true));
             PaintPreset toRemove = null;
-            foreach (PaintPreset preset in PaintBrush.Presets)
+            var presets = PaintBrush.Presets;
+            for (int i = 0; i < presets.Count; i += 2)
             {
-                GUILayout.BeginHorizontal(_box);
-                Rect presetSwatch = GUILayoutUtility.GetRect(30f, 30f, GUILayout.Width(30f), GUILayout.Height(30f));
-                DrawSwatch(presetSwatch, preset.Color, preset.Finish);
-                if (GUILayout.Button(preset.name + "\n" + FinishText(preset.Finish), _button, GUILayout.Height(36f)))
+                GUILayout.BeginHorizontal();
+                for (int j = i; j < Mathf.Min(i + 2, presets.Count); j++)
                 {
-                    PaintBrush.Apply(preset);
-                    _refreshGameMenu = true;
+                    if (PresetChip(selection, presets[j]))
+                        toRemove = presets[j];
+                    if (j == i)
+                        GUILayout.Space(6f);
                 }
-                if (GUILayout.Button("X", _button, GUILayout.Width(30f), GUILayout.Height(36f)))
-                    toRemove = preset;
                 GUILayout.EndHorizontal();
+                GUILayout.Space(6f);
             }
+            GUILayout.EndScrollView();
             if (toRemove != null)
                 PaintBrush.RemovePreset(toRemove);
-            GUILayout.EndScrollView();
+        }
 
-            GUILayout.EndArea();
+        // Returns true when the preset's delete button was clicked
+        private static bool PresetChip(IPlayerPaintToolSelectionTracker selection, PaintPreset preset)
+        {
+            Rect chip = GUILayoutUtility.GetRect(196f, 40f, GUILayout.Width(196f), GUILayout.Height(40f));
+            bool hover = chip.Contains(Event.current.mousePosition);
+            GUI.Box(chip, GUIContent.none, hover ? _chipActiveStyle : _cardStyle);
+            DrawSwatch(new Rect(chip.x + 6f, chip.y + 6f, 28f, 28f), preset.Color, preset.Finish);
+            GUI.Label(new Rect(chip.x + 42f, chip.y + 3f, chip.width - 70f, 20f), preset.name, _label);
+            GUI.Label(new Rect(chip.x + 42f, chip.y + 20f, chip.width - 70f, 18f), ShortFinish(preset.Finish), _muted);
+            var delete = new Rect(chip.xMax - 24f, chip.y + 10f, 18f, 20f);
+            if (hover && GUI.Button(delete, "x", _muted))
+                return true;
+            if (GUI.Button(chip, GUIContent.none, GUIStyle.none))
+            {
+                PaintBrush.Apply(preset);
+                _syncedColor = new Color(-1f, 0f, 0f);
+            }
+            return false;
+        }
+
+        // ---- State ----
+
+        // Follows color changes made elsewhere (pipette, presets) without losing the hue on greys
+        private static void SyncHsv(Color color)
+        {
+            if (_drag != Drag.None || ColorClose(color, _syncedColor))
+                return;
+            Color.RGBToHSV(color, out float h, out float s, out float v);
+            if (s > 0.001f && v > 0.001f)
+                _hue = h;
+            _saturation = v > 0.001f ? s : _saturation;
+            _value = v;
+            _syncedColor = color;
+            _hexInput = "#" + ColorUtility.ToHtmlStringRGB(color);
         }
 
         private static void SetColor(IPlayerPaintToolSelectionTracker selection, Color color)
         {
             selection.SelectedPaintColor = color;
-            _hexInput = "#" + ColorUtility.ToHtmlStringRGB(color);
-            _refreshGameMenu = true;
-        }
-
-        private static void SetBothSides(IPlayerPaintToolSelectionTracker selection, bool bothSides)
-        {
-            selection.PaintBothSides = bothSides;
-            _refreshGameMenu = true;
+            _syncedColor = new Color(-1f, 0f, 0f);
         }
 
         private static void SetFinish(PaintFinish finish)
@@ -256,35 +362,60 @@ namespace StellarDriveDemoTF.Paint
             _finishDirty = true;
         }
 
-        private static float Slider(string label, float value)
+        private static bool ColorClose(Color a, Color b) =>
+            Mathf.Abs(a.r - b.r) < 0.002f && Mathf.Abs(a.g - b.g) < 0.002f && Mathf.Abs(a.b - b.b) < 0.002f;
+
+        // ---- Drawing helpers ----
+
+        private static float Slider(string label, float value, bool enabled)
         {
             GUILayout.BeginHorizontal();
-            GUILayout.Label(label, _label, GUILayout.Width(90f));
-            value = GUILayout.HorizontalSlider(value, 0f, 1f, GUILayout.ExpandWidth(true));
-            GUILayout.Label(Mathf.RoundToInt(value * 100f) + "%", _label, GUILayout.Width(44f));
+            GUILayout.Label(label, enabled ? _label : _muted, GUILayout.Width(86f));
+            Rect track = GUILayoutUtility.GetRect(100f, 22f, GUILayout.ExpandWidth(true), GUILayout.Height(22f));
+            Fill(new Rect(track.x, track.y + 9f, track.width, 4f), Chip);
+            Fill(new Rect(track.x, track.y + 9f, track.width * value, 4f), enabled ? Accent : MutedText);
+            Fill(new Rect(track.x + track.width * value - 5f, track.y + 4f, 10f, 14f), enabled ? Color.white : MutedText);
+            Event e = Event.current;
+            if ((e.type == EventType.MouseDown || e.type == EventType.MouseDrag) && e.button == 0 && track.Contains(e.mousePosition))
+            {
+                value = Mathf.Clamp01((e.mousePosition.x - track.x) / track.width);
+                e.Use();
+            }
+            GUILayout.Label(Mathf.RoundToInt(value * 100f) + "%", _muted, GUILayout.Width(40f));
             GUILayout.EndHorizontal();
             return value;
         }
 
         private static void SectionHeader(string text)
         {
-            GUILayout.Space(10f);
+            GUILayout.Space(12f);
+            GUILayout.Label(text.ToUpperInvariant(), _section);
             Rect line = GUILayoutUtility.GetRect(10f, 1f, GUILayout.ExpandWidth(true), GUILayout.Height(1f));
-            Fill(line, Section);
-            GUILayout.Label(text.ToUpperInvariant(), _title);
+            Fill(line, Chip);
+            GUILayout.Space(6f);
         }
 
-        // Swatch with a gloss highlight, a metal gradient or a glow ring depending on the finish
+        // Swatch showing the finish: shine for gloss, darker lower half for metal, halo for glow
         private static void DrawSwatch(Rect rect, Color color, PaintFinish finish)
         {
-            Fill(new Rect(rect.x - 2f, rect.y - 2f, rect.width + 4f, rect.height + 4f), finish.Enabled && finish.Glow > 0 ? color : Section);
-            Fill(rect, color);
+            if (finish.Enabled && finish.Glow > 0)
+                Fill(new Rect(rect.x - 3f, rect.y - 3f, rect.width + 6f, rect.height + 6f), new Color(color.r, color.g, color.b, 0.35f + 0.5f * finish.GlowValue));
+            GUI.Box(rect, GUIContent.none, _swatchFrame);
+            var inner = new Rect(rect.x + 2f, rect.y + 2f, rect.width - 4f, rect.height - 4f);
+            Fill(inner, color);
             if (!finish.Enabled)
                 return;
             if (finish.Metal > 0)
-                Fill(new Rect(rect.x, rect.y + rect.height * 0.5f, rect.width, rect.height * 0.5f), new Color(0f, 0f, 0f, 0.35f * finish.MetalValue));
+                Fill(new Rect(inner.x, inner.y + inner.height * 0.5f, inner.width, inner.height * 0.5f), new Color(0f, 0f, 0f, 0.3f * finish.MetalValue));
             if (finish.Gloss > 0)
-                Fill(new Rect(rect.x + rect.width * 0.12f, rect.y + rect.height * 0.12f, rect.width * 0.35f, rect.height * 0.12f), new Color(1f, 1f, 1f, 0.75f * finish.GlossValue));
+                Fill(new Rect(inner.x + inner.width * 0.1f, inner.y + inner.height * 0.12f, inner.width * 0.4f, Mathf.Max(2f, inner.height * 0.1f)), new Color(1f, 1f, 1f, 0.7f * finish.GlossValue));
+        }
+
+        private static void DrawRing(Vector2 center)
+        {
+            Fill(new Rect(center.x - 6f, center.y - 6f, 12f, 12f), Color.white);
+            Fill(new Rect(center.x - 4f, center.y - 4f, 8f, 8f), Color.black);
+            Fill(new Rect(center.x - 2f, center.y - 2f, 4f, 4f), Color.HSVToRGB(_hue, _saturation, _value));
         }
 
         private static string FinishText(PaintFinish finish)
@@ -297,13 +428,25 @@ namespace StellarDriveDemoTF.Paint
             return text;
         }
 
+        private static string ShortFinish(PaintFinish finish)
+        {
+            if (!finish.Enabled)
+                return "d'origine";
+            foreach ((string name, PaintFinish quick) in QuickFinishes)
+            {
+                if (quick.Equals(finish))
+                    return name.ToLowerInvariant();
+            }
+            return $"B{Mathf.RoundToInt(finish.GlossValue * 100f)} M{Mathf.RoundToInt(finish.MetalValue * 100f)} L{Mathf.RoundToInt(finish.GlowValue * 100f)}";
+        }
+
         private static string TargetText()
         {
             if (PaintToolPatches.HoveringHull)
-                return "Cible : mur / sol (couleur seulement)";
+                return "> Mur / sol — couleur";
             if (PaintToolPatches.HoveredPart.HasValue)
-                return "Cible : pièce (couleur + finition)";
-            return "Cible : aucune";
+                return "> Pièce — couleur + finition";
+            return "> Aucune cible";
         }
 
         private static string Hex(string text)
@@ -320,37 +463,90 @@ namespace StellarDriveDemoTF.Paint
             GUI.color = previous;
         }
 
+        // ---- Textures and styles ----
+
+        private static void UpdateSvTexture()
+        {
+            if (_svSquare != null && Mathf.Abs(_svTextureHue - _hue) < 0.002f)
+                return;
+            _svTextureHue = _hue;
+            const int size = 96;
+            if (_svSquare == null)
+                _svSquare = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+            var pixels = new Color[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+                pixels[y * size + x] = Color.HSVToRGB(_hue, x / (size - 1f), y / (size - 1f));
+            _svSquare.SetPixels(pixels);
+            _svSquare.Apply();
+        }
+
         private static void EnsureStyles()
         {
-            if (_white == null)
-            {
-                _white = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
-                _white.SetPixel(0, 0, Color.white);
-                _white.Apply();
-            }
             if (_title != null)
                 return;
 
-            _title = new GUIStyle(GUI.skin.label) { fontSize = 12, fontStyle = FontStyle.Bold };
-            _title.normal.textColor = Accent;
-            _label = new GUIStyle(GUI.skin.label) { fontSize = 13, wordWrap = true };
+            _white = Solid(Color.white);
+            _hueBar = new Texture2D(1, 128, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+            for (int y = 0; y < 128; y++)
+                _hueBar.SetPixel(0, y, Color.HSVToRGB(y / 127f, 1f, 1f));
+            _hueBar.Apply();
+
+            _panelStyle = Rounded(Panel, 12);
+            _cardStyle = Rounded(Card, 8);
+            _chipStyle = Rounded(Chip, 7);
+            _chipStyle.hover.background = RoundedTexture(ChipHover, 7);
+            _chipStyle.active.background = RoundedTexture(Accent * 0.7f, 7);
+            _chipStyle.alignment = TextAnchor.MiddleCenter;
+            _chipStyle.fontSize = 13;
+            _chipStyle.normal.textColor = _chipStyle.hover.textColor = _chipStyle.active.textColor = TextColor;
+            _chipActiveStyle = new GUIStyle(_chipStyle) { fontStyle = FontStyle.Bold };
+            _chipActiveStyle.normal.background = _chipActiveStyle.hover.background = RoundedTexture(new Color(Accent.r * 0.85f, Accent.g * 0.85f, Accent.b * 0.85f, 1f), 7);
+            _chipActiveStyle.normal.textColor = _chipActiveStyle.hover.textColor = Color.white;
+            _swatchFrame = Rounded(new Color(1f, 1f, 1f, 0.18f), 5);
+
+            _title = new GUIStyle(GUI.skin.label) { fontSize = 15, fontStyle = FontStyle.Bold };
+            _title.normal.textColor = TextColor;
+            _section = new GUIStyle(GUI.skin.label) { fontSize = 11, fontStyle = FontStyle.Bold };
+            _section.normal.textColor = Accent;
+            _label = new GUIStyle(GUI.skin.label) { fontSize = 13, wordWrap = false, clipping = TextClipping.Clip };
             _label.normal.textColor = TextColor;
-            _muted = new GUIStyle(_label) { fontSize = 11 };
+            _muted = new GUIStyle(_label) { fontSize = 11, wordWrap = true };
             _muted.normal.textColor = MutedText;
-            _big = new GUIStyle(_label) { fontSize = 20, fontStyle = FontStyle.Bold };
-            _button = new GUIStyle(GUI.skin.button) { fontSize = 12, wordWrap = true };
-            _button.normal.background = Solid(new Color(0.17f, 0.18f, 0.22f));
-            _button.hover.background = Solid(new Color(0.24f, 0.26f, 0.31f));
-            _button.active.background = Solid(new Color(0.3f, 0.32f, 0.38f));
-            _button.normal.textColor = _button.hover.textColor = _button.active.textColor = TextColor;
-            _selectedButton = new GUIStyle(_button) { fontStyle = FontStyle.Bold };
-            _selectedButton.normal.background = _selectedButton.hover.background = Solid(Accent * 0.85f);
-            _selectedButton.normal.textColor = _selectedButton.hover.textColor = Color.white;
-            _field = new GUIStyle(GUI.skin.textField) { fontSize = 13 };
-            _field.normal.background = _field.focused.background = Solid(new Color(0.03f, 0.035f, 0.045f));
-            _field.normal.textColor = _field.focused.textColor = TextColor;
-            _box = new GUIStyle { padding = new RectOffset(4, 4, 3, 3), margin = new RectOffset(0, 0, 2, 2) };
-            _box.normal.background = Solid(Section);
+            _big = new GUIStyle(_label) { fontSize = 22, fontStyle = FontStyle.Bold };
+            _field = new GUIStyle(GUI.skin.textField) { fontSize = 13, padding = new RectOffset(8, 8, 5, 5) };
+            _field.normal.background = _field.focused.background = _field.hover.background = RoundedTexture(new Color(0.03f, 0.035f, 0.045f, 1f), 6);
+            _field.border = new RectOffset(8, 8, 8, 8);
+            _field.normal.textColor = _field.focused.textColor = _field.hover.textColor = TextColor;
+            _toggle = new GUIStyle(GUI.skin.toggle) { fontSize = 13 };
+            _toggle.normal.textColor = _toggle.onNormal.textColor = _toggle.hover.textColor = _toggle.onHover.textColor = TextColor;
+        }
+
+        private static GUIStyle Rounded(Color color, int radius)
+        {
+            return new GUIStyle
+            {
+                normal = { background = RoundedTexture(color, radius) },
+                border = new RectOffset(radius + 1, radius + 1, radius + 1, radius + 1),
+                padding = new RectOffset(8, 8, 4, 4)
+            };
+        }
+
+        // Anti-aliased rounded rectangle, used 9-sliced so it scales to any size
+        private static Texture2D RoundedTexture(Color color, int radius)
+        {
+            int size = radius * 2 + 4;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = Mathf.Max(0f, Mathf.Max(radius - (x + 0.5f), (x + 0.5f) - (size - radius)));
+                float dy = Mathf.Max(0f, Mathf.Max(radius - (y + 0.5f), (y + 0.5f) - (size - radius)));
+                float coverage = Mathf.Clamp01(radius + 0.5f - Mathf.Sqrt(dx * dx + dy * dy));
+                texture.SetPixel(x, y, new Color(color.r, color.g, color.b, color.a * coverage));
+            }
+            texture.Apply();
+            return texture;
         }
 
         private static Texture2D Solid(Color color)

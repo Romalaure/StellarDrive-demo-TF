@@ -21,7 +21,7 @@ namespace StellarDriveDemoTF.Lights
     /// </summary>
     internal static class LampParts
     {
-        public const string BuildTab = "Éclairage";
+        public const string BuildTab = "TF";
         private const string Donor = "SignalDisplay";
 
         private static readonly Dictionary<LampGroup, Material> Materials = new Dictionary<LampGroup, Material>();
@@ -43,47 +43,72 @@ namespace StellarDriveDemoTF.Lights
                 });
             }
             TFMod.Log.Msg($"registered {LampCatalog.All.Length} lamps in the '{BuildTab}' build tab");
+            Mirrors.MirrorParts.Register();
+        }
+
+        internal static void RegisterDonorPart(ushort id, string tab, System.Action<PartSettings, GameObject> configure)
+        {
+            CustomParts.Register(new CustomPartDefinition
+            {
+                Id = id,
+                Name = "TF_" + id,
+                Donor = Donor,
+                BuildTab = tab,
+                BuildRow = 0,
+                Configure = configure
+            });
         }
 
         private static void Configure(LampSpec spec, PartSettings settings, GameObject prefab)
         {
-            settings.fullLabel = spec.Label;
-            settings.description = spec.Description;
+            Transform visuals = PrepareDonor(settings, prefab, spec.Label, spec.Description, spec.Mass, spec.Cost,
+                spec.BoundsCenter, spec.BoundsSize, spec.SocketPosition);
+            BuildModel(spec, visuals);
+            visuals.gameObject.AddComponent<LampVisuals>();
+        }
+
+        /// <summary>
+        /// Turns a cloned Signal Display into a blank part: new label, cost and size, its display
+        /// model removed. Returns the "Visuals" transform to build the new model under.
+        /// </summary>
+        internal static Transform PrepareDonor(PartSettings settings, GameObject prefab, string label, string description, float mass,
+            (uint Item, int Count)[] cost, Vector3 boundsCenter, Vector3 boundsSize, Vector3 socketPosition)
+        {
+            settings.fullLabel = label;
+            settings.description = description;
             settings.localizedDescription = null;
-            settings.mass = spec.Mass;
-            SetCost(settings, spec.Cost);
+            settings.mass = mass;
+            SetCost(settings, cost);
 
             Transform visuals = prefab.transform.Find("Visuals");
             Object.DestroyImmediate(visuals.GetComponent<SignalDisplayVisuals>());
             foreach (Transform child in visuals.Cast<Transform>().ToList())
                 Object.DestroyImmediate(child.gameObject);
 
-            BuildModel(spec, visuals);
-            visuals.gameObject.AddComponent<LampVisuals>();
-
             var bounds = prefab.GetComponent<ShipPartBounds>();
             if (bounds != null)
             {
-                bounds.center = spec.BoundsCenter;
-                bounds.bounds = spec.BoundsSize;
+                bounds.center = boundsCenter;
+                bounds.bounds = boundsSize;
             }
 
-            // The interaction collider (look at it, pick it up) covers the whole lamp
+            // The interaction collider (look at it, pick it up) covers the whole part
             Transform interactions = prefab.transform.Find("Interactions");
             if (interactions != null)
             {
                 foreach (BoxCollider box in interactions.GetComponentsInChildren<BoxCollider>(true))
                 {
-                    box.transform.localPosition = spec.BoundsCenter;
+                    box.transform.localPosition = boundsCenter;
                     box.transform.localRotation = Quaternion.identity;
                     box.center = Vector3.zero;
-                    box.size = spec.BoundsSize;
+                    box.size = boundsSize;
                 }
             }
 
             // SDModKit then seats the socket onto the bounds
             foreach (SocketObject socket in prefab.GetComponentsInChildren<SocketObject>(true))
-                socket.transform.localPosition = spec.SocketPosition;
+                socket.transform.localPosition = socketPosition;
+            return visuals;
         }
 
         private static void BuildModel(LampSpec spec, Transform visuals)

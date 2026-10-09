@@ -49,7 +49,7 @@ namespace StellarDriveDemoTF.Lights
     {
         private static void Postfix(PartSettings part, ref bool __result)
         {
-            if (!__result && part != null && LampCatalog.IsLamp(part.id))
+            if (!__result && part != null && (LampCatalog.IsLamp(part.id) || Mirrors.MirrorCatalog.IsMirror(part.id)))
                 __result = true;
         }
     }

@@ -114,9 +114,20 @@ namespace StellarDriveDemoTF.Paint
     [HarmonyPatch(typeof(PaintMenuActivator))]
     internal static class PaintMenuActivatorPatch
     {
+        private static readonly AccessTools.FieldRef<PaintMenuActivator, PaintMenu> GameMenu =
+            AccessTools.FieldRefAccess<PaintMenuActivator, PaintMenu>("_paintUI");
+
+        // The game's menu stays open (it frees the cursor and pauses the tool) but is hidden:
+        // the TF panel replaces it
         [HarmonyPostfix]
         [HarmonyPatch(nameof(PaintMenuActivator.Open))]
-        private static void AfterOpen() => PaintHud.MenuOpen = true;
+        private static void AfterOpen(PaintMenuActivator __instance)
+        {
+            PaintHud.MenuOpen = true;
+            PaintMenu menu = GameMenu(__instance);
+            if (menu != null)
+                menu.gameObject.SetActive(false);
+        }
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(PaintMenuActivator.Close))]
