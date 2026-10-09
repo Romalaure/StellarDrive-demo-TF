@@ -9,6 +9,7 @@ using Ships.Visuals;
 using StellarDriveDemoTF.Common;
 using Tools.Common.Hover;
 using Tools.PaintTool;
+using UI.PaintMenu;
 using UnityEngine;
 using WorldTracking.Interface.Values;
 
@@ -38,7 +39,8 @@ namespace StellarDriveDemoTF.Paint
         private static void AfterUpdateChecks(PaintTool __instance, CameraPhysicsData cameraPhysics)
         {
             _hoveredPart = null;
-            if (!Settings.PaintAllParts.Value || HoveredHull(__instance) != null)
+            HoveringHull = HoveredHull(__instance) != null;
+            if (!Settings.PaintAllParts.Value || HoveringHull)
                 return;
 
             if (!ClientScene.PhysicsScene.Raycast(cameraPhysics.CameraPos, cameraPhysics.Direction, out RaycastHit hit,
@@ -60,7 +62,7 @@ namespace StellarDriveDemoTF.Paint
                 var selection = GameServices.PaintSelection;
                 if (selection == null)
                     return;
-                PaintNet.RequestPaint(key, selection.SelectedPaintColor, selection.ReplaceAllIdenticalColors);
+                PaintNet.RequestPaint(key, PaintBrush.Current, selection.ReplaceAllIdenticalColors);
                 _lastPainted = key;
             }
         }
@@ -70,7 +72,7 @@ namespace StellarDriveDemoTF.Paint
         [HarmonyPatch(nameof(PaintTool.PrimaryActionBegin))]
         private static void AfterPrimaryActionBegin() => _lastPainted = null;
 
-        // Middle click picks the color of the hovered part
+        // Middle click picks the paint (color and finish) of the hovered part
         [HarmonyPostfix]
         [HarmonyPatch(nameof(PaintTool.TertiaryActionBegin))]
         private static void AfterTertiaryActionBegin(PaintTool __instance)
@@ -78,8 +80,19 @@ namespace StellarDriveDemoTF.Paint
             if (HoveredHull(__instance) != null || !_hoveredPart.HasValue)
                 return;
             var selection = GameServices.PaintSelection;
-            if (selection != null && PaintNet.Client.TryGet(_hoveredPart.Value, out Color32 color))
-                selection.SelectedPaintColor = color;
+            if (selection != null && PaintNet.Client.TryGet(_hoveredPart.Value, out PaintData paint))
+            {
+                selection.SelectedPaintColor = paint.Color;
+                PaintBrush.Finish = paint.Finish;
+            }
+        }
+
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(PaintTool.EnableTool))]
+        private static void AfterEnableTool()
+        {
+            PaintBrush.EnsureLoaded();
+            PaintHud.ToolActive = true;
         }
 
         [HarmonyPostfix]
@@ -88,7 +101,26 @@ namespace StellarDriveDemoTF.Paint
         {
             _hoveredPart = null;
             _lastPainted = null;
+            PaintHud.ToolActive = false;
+            PaintBrush.Save();
         }
+
+        /// <summary>What the paint tool is aiming at, for the HUD.</summary>
+        public static PartKey? HoveredPart => _hoveredPart;
+        public static bool HoveringHull { get; private set; }
+    }
+
+    /// <summary>Tracks whether the game's paint menu (right click) is open, so the HUD can show its full panel.</summary>
+    [HarmonyPatch(typeof(PaintMenuActivator))]
+    internal static class PaintMenuActivatorPatch
+    {
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(PaintMenuActivator.Open))]
+        private static void AfterOpen() => PaintHud.MenuOpen = true;
+
+        [HarmonyPostfix]
+        [HarmonyPatch(nameof(PaintMenuActivator.Close))]
+        private static void AfterClose() => PaintHud.MenuOpen = false;
     }
 
     /// <summary>Paints a part's visual as soon as it is created (ship coming into view, part placed).</summary>

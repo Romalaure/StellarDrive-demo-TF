@@ -19,19 +19,29 @@ namespace StellarDriveDemoTF.Paint
     internal static class PaintPersistence
     {
         private const string FileName = "tf-paint.json";
-        private const int FormatVersion = 1;
+        // 1: color only; 2: optional finish
+        private const int FormatVersion = 2;
 
         private sealed class SaveFile
         {
             public int version = FormatVersion;
-            public List<SavedColor> parts = new List<SavedColor>();
+            public List<SavedPaint> parts = new List<SavedPaint>();
         }
 
-        private sealed class SavedColor
+        private sealed class SavedPaint
         {
             public uint ship;
             public ushort part;
             public string color;
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public SavedFinish finish;
+        }
+
+        private sealed class SavedFinish
+        {
+            public byte gloss;
+            public byte metal;
+            public byte glow;
         }
 
         public static void Save(string worldDirectory)
@@ -42,7 +52,15 @@ namespace StellarDriveDemoTF.Paint
             {
                 parts = PaintNet.Server.All
                     .OrderBy(e => e.Key.ShipId).ThenBy(e => e.Key.PartId)
-                    .Select(e => new SavedColor { ship = e.Key.ShipId, part = e.Key.PartId, color = "#" + ColorUtility.ToHtmlStringRGB(e.Value) })
+                    .Select(e => new SavedPaint
+                    {
+                        ship = e.Key.ShipId,
+                        part = e.Key.PartId,
+                        color = "#" + ColorUtility.ToHtmlStringRGB(e.Value.Color),
+                        finish = e.Value.Finish.Enabled
+                            ? new SavedFinish { gloss = e.Value.Finish.Gloss, metal = e.Value.Finish.Metal, glow = e.Value.Finish.Glow }
+                            : null
+                    })
                     .ToList()
             };
 
@@ -73,10 +91,14 @@ namespace StellarDriveDemoTF.Paint
             if (file?.parts == null)
                 return;
 
-            foreach (SavedColor saved in file.parts)
+            foreach (SavedPaint saved in file.parts)
             {
-                if (saved?.color != null && ColorUtility.TryParseHtmlString(saved.color, out Color color))
-                    PaintNet.Server.Set(new PartKey(saved.ship, saved.part), color);
+                if (saved?.color == null || !ColorUtility.TryParseHtmlString(saved.color, out Color color))
+                    continue;
+                PaintFinish finish = saved.finish == null
+                    ? PaintFinish.None
+                    : new PaintFinish { Enabled = true, Gloss = saved.finish.gloss, Metal = saved.finish.metal, Glow = saved.finish.glow };
+                PaintNet.Server.Set(new PartKey(saved.ship, saved.part), new PaintData(color, finish));
             }
             TFMod.Log.Msg($"loaded {PaintNet.Server.Count} painted part(s)");
         }

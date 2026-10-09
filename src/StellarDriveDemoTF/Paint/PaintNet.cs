@@ -24,7 +24,7 @@ namespace StellarDriveDemoTF.Paint
         {
             public uint ShipId;
             public ushort PartId;
-            public Color32 Color;
+            public PaintData Paint;
             public bool ReplaceSame;
         }
 
@@ -33,7 +33,7 @@ namespace StellarDriveDemoTF.Paint
             public uint ShipId;
             public ushort PartId;
             public bool Cleared;
-            public Color32 Color;
+            public PaintData Paint;
         }
 
         private struct SyncRequest : IBroadcast
@@ -46,10 +46,10 @@ namespace StellarDriveDemoTF.Paint
             public byte Unused;
         }
 
-        /// <summary>Authoritative colors, only filled on the host.</summary>
+        /// <summary>Authoritative paint, only filled on the host.</summary>
         public static readonly PaintStore Server = new PaintStore();
 
-        /// <summary>Colors this client knows about, used for rendering.</summary>
+        /// <summary>Paint this client knows about, used for rendering.</summary>
         public static readonly PaintStore Client = new PaintStore();
 
         private static NetworkManager _network;
@@ -63,14 +63,14 @@ namespace StellarDriveDemoTF.Paint
             {
                 writer.WriteUInt32(m.ShipId);
                 writer.WriteUInt16(m.PartId);
-                WriteColor(writer, m.Color);
+                WritePaint(writer, m.Paint);
                 writer.WriteBoolean(m.ReplaceSame);
             });
             GenericReader<PaintRequest>.SetRead(reader => new PaintRequest
             {
                 ShipId = reader.ReadUInt32(),
                 PartId = reader.ReadUInt16(),
-                Color = ReadColor(reader),
+                Paint = ReadPaint(reader),
                 ReplaceSame = reader.ReadBoolean()
             });
 
@@ -79,14 +79,14 @@ namespace StellarDriveDemoTF.Paint
                 writer.WriteUInt32(m.ShipId);
                 writer.WriteUInt16(m.PartId);
                 writer.WriteBoolean(m.Cleared);
-                WriteColor(writer, m.Color);
+                WritePaint(writer, m.Paint);
             });
             GenericReader<PaintUpdate>.SetRead(reader => new PaintUpdate
             {
                 ShipId = reader.ReadUInt32(),
                 PartId = reader.ReadUInt16(),
                 Cleared = reader.ReadBoolean(),
-                Color = ReadColor(reader)
+                Paint = ReadPaint(reader)
             });
 
             GenericWriter<SyncRequest>.SetWrite((writer, m) => writer.WriteUInt8Unpacked(m.Unused));
@@ -128,13 +128,13 @@ namespace StellarDriveDemoTF.Paint
         }
 
         /// <summary>Called by the paint tool on this client.</summary>
-        public static void RequestPaint(PartKey key, Color color, bool replaceSame)
+        public static void RequestPaint(PartKey key, PaintData paint, bool replaceSame)
         {
             SendToServer(new PaintRequest
             {
                 ShipId = key.ShipId,
                 PartId = key.PartId,
-                Color = ToColor32(color),
+                Paint = paint,
                 ReplaceSame = replaceSame
             }, OnPaintRequest);
         }
@@ -145,7 +145,7 @@ namespace StellarDriveDemoTF.Paint
             SendToServer(new GiveToolRequest(), OnGiveToolRequest);
         }
 
-        /// <summary>A part was removed from its ship; forget its color on whichever side this runs.</summary>
+        /// <summary>A part was removed from its ship; forget its paint on whichever side this runs.</summary>
         public static void ForgetPart(PartKey key)
         {
             Server.Remove(key);
@@ -185,11 +185,6 @@ namespace StellarDriveDemoTF.Paint
             network.ClientManager.RegisterBroadcast<PaintUpdate>(OnPaintUpdate);
         }
 
-        private static void OnGiveToolRequest(NetworkConnection sender, GiveToolRequest request, Channel channel)
-        {
-            PaintToolGiver.ServerGive(sender);
-        }
-
         // On the host, handle our own requests directly instead of looping through the transport
         private static void SendToServer<T>(T message, Action<NetworkConnection, T, Channel> serverHandler) where T : struct, IBroadcast
         {
@@ -211,6 +206,11 @@ namespace StellarDriveDemoTF.Paint
             }
         }
 
+        private static void OnGiveToolRequest(NetworkConnection sender, GiveToolRequest request, Channel channel)
+        {
+            PaintToolGiver.ServerGive(sender);
+        }
+
         private static void OnPaintRequest(NetworkConnection sender, PaintRequest request, Channel channel)
         {
             if (!Settings.PaintAllParts.Value)
@@ -227,11 +227,11 @@ namespace StellarDriveDemoTF.Paint
             if (request.ReplaceSame)
             {
                 // Same rule as the game's hull "replace all identical colors": every part of this ship
-                // sharing the clicked part's color (or every unpainted part, if it is unpainted)
-                bool targetPainted = Server.TryGet(target, out Color32 targetColor);
+                // with the clicked part's paint (or every unpainted part, if it is unpainted)
+                bool targetPainted = Server.TryGet(target, out PaintData targetPaint);
                 toPaint = ship.StatefulParts
                     .Select(p => new PartKey(request.ShipId, p.Id))
-                    .Where(k => Server.TryGet(k, out Color32 c) ? targetPainted && PaintStore.SameRgb(c, targetColor) : !targetPainted)
+                    .Where(k => Server.TryGet(k, out PaintData p) ? targetPainted && p.SameAs(targetPaint) : !targetPainted)
                     .ToList();
             }
             else
@@ -241,8 +241,8 @@ namespace StellarDriveDemoTF.Paint
 
             foreach (PartKey key in toPaint)
             {
-                Server.Set(key, request.Color);
-                _network.ServerManager.Broadcast(new PaintUpdate { ShipId = key.ShipId, PartId = key.PartId, Color = request.Color });
+                Server.Set(key, request.Paint);
+                _network.ServerManager.Broadcast(new PaintUpdate { ShipId = key.ShipId, PartId = key.PartId, Paint = request.Paint });
             }
         }
 
@@ -250,13 +250,13 @@ namespace StellarDriveDemoTF.Paint
         {
             if (sender == null)
                 return;
-            foreach (KeyValuePair<PartKey, Color32> entry in Server.All.ToList())
+            foreach (KeyValuePair<PartKey, PaintData> entry in Server.All.ToList())
             {
                 _network.ServerManager.Broadcast(sender, new PaintUpdate
                 {
                     ShipId = entry.Key.ShipId,
                     PartId = entry.Key.PartId,
-                    Color = entry.Value
+                    Paint = entry.Value
                 });
             }
         }
@@ -267,25 +267,37 @@ namespace StellarDriveDemoTF.Paint
             if (update.Cleared)
                 Client.Remove(key);
             else
-                Client.Set(key, update.Color);
+                Client.Set(key, update.Paint);
             PartTint.Refresh(key);
         }
 
-        private static void WriteColor(Writer writer, Color32 color)
+        private static void WritePaint(Writer writer, PaintData paint)
         {
-            writer.WriteUInt8Unpacked(color.r);
-            writer.WriteUInt8Unpacked(color.g);
-            writer.WriteUInt8Unpacked(color.b);
+            writer.WriteUInt8Unpacked(paint.Color.r);
+            writer.WriteUInt8Unpacked(paint.Color.g);
+            writer.WriteUInt8Unpacked(paint.Color.b);
+            writer.WriteBoolean(paint.Finish.Enabled);
+            writer.WriteUInt8Unpacked(paint.Finish.Gloss);
+            writer.WriteUInt8Unpacked(paint.Finish.Metal);
+            writer.WriteUInt8Unpacked(paint.Finish.Glow);
         }
 
-        private static Color32 ReadColor(Reader reader)
+        private static PaintData ReadPaint(Reader reader)
         {
-            return new Color32(reader.ReadUInt8Unpacked(), reader.ReadUInt8Unpacked(), reader.ReadUInt8Unpacked(), 255);
+            var color = new Color32(reader.ReadUInt8Unpacked(), reader.ReadUInt8Unpacked(), reader.ReadUInt8Unpacked(), 255);
+            var finish = new PaintFinish
+            {
+                Enabled = reader.ReadBoolean(),
+                Gloss = reader.ReadUInt8Unpacked(),
+                Metal = reader.ReadUInt8Unpacked(),
+                Glow = reader.ReadUInt8Unpacked()
+            };
+            return new PaintData(color, finish);
         }
 
-        private static Color32 ToColor32(Color color)
+        /// <summary>Same byte conversion the game uses for hull paint.</summary>
+        public static Color32 ToColor32(Color color)
         {
-            // Same byte conversion the game uses for hull paint
             return new Color32((byte)(color.r * 255f), (byte)(color.g * 255f), (byte)(color.b * 255f), 255);
         }
     }

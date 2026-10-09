@@ -21,19 +21,66 @@ namespace StellarDriveDemoTF.Paint
         public override string ToString() => ShipId + ":" + PartId;
     }
 
-    /// <summary>Paint color of every painted floating part (doors, machines, ...). Unpainted parts are absent.</summary>
+    /// <summary>
+    /// Surface look of a painted part. Without a finish the part keeps its own shininess and only
+    /// takes the color. Values are 0-255 so they travel and save compactly.
+    /// </summary>
+    internal struct PaintFinish : IEquatable<PaintFinish>
+    {
+        public bool Enabled;
+        public byte Gloss;
+        public byte Metal;
+        public byte Glow;
+
+        public static PaintFinish None => default;
+
+        public static PaintFinish Of(float gloss, float metal, float glow) => new PaintFinish
+        {
+            Enabled = true,
+            Gloss = ToByte(gloss),
+            Metal = ToByte(metal),
+            Glow = ToByte(glow)
+        };
+
+        public float GlossValue => Gloss / 255f;
+        public float MetalValue => Metal / 255f;
+        public float GlowValue => Glow / 255f;
+
+        public bool Equals(PaintFinish other) =>
+            Enabled == other.Enabled && (!Enabled || (Gloss == other.Gloss && Metal == other.Metal && Glow == other.Glow));
+
+        public override bool Equals(object obj) => obj is PaintFinish other && Equals(other);
+        public override int GetHashCode() => Enabled ? (Gloss << 16) | (Metal << 8) | Glow : -1;
+
+        private static byte ToByte(float value) => (byte)Mathf.RoundToInt(Mathf.Clamp01(value) * 255f);
+    }
+
+    internal struct PaintData
+    {
+        public Color32 Color;
+        public PaintFinish Finish;
+
+        public PaintData(Color32 color, PaintFinish finish)
+        {
+            Color = color;
+            Finish = finish;
+        }
+
+        public bool SameAs(PaintData other) =>
+            Color.r == other.Color.r && Color.g == other.Color.g && Color.b == other.Color.b && Finish.Equals(other.Finish);
+    }
+
+    /// <summary>Paint of every painted floating part (doors, machines, ...). Unpainted parts are absent.</summary>
     internal sealed class PaintStore
     {
-        private readonly Dictionary<PartKey, Color32> _colors = new Dictionary<PartKey, Color32>();
+        private readonly Dictionary<PartKey, PaintData> _paint = new Dictionary<PartKey, PaintData>();
 
-        public int Count => _colors.Count;
-        public IEnumerable<KeyValuePair<PartKey, Color32>> All => _colors;
+        public int Count => _paint.Count;
+        public IEnumerable<KeyValuePair<PartKey, PaintData>> All => _paint;
 
-        public bool TryGet(PartKey key, out Color32 color) => _colors.TryGetValue(key, out color);
-        public void Set(PartKey key, Color32 color) => _colors[key] = color;
-        public bool Remove(PartKey key) => _colors.Remove(key);
-        public void Clear() => _colors.Clear();
-
-        public static bool SameRgb(Color32 a, Color32 b) => a.r == b.r && a.g == b.g && a.b == b.b;
+        public bool TryGet(PartKey key, out PaintData paint) => _paint.TryGetValue(key, out paint);
+        public void Set(PartKey key, PaintData paint) => _paint[key] = paint;
+        public bool Remove(PartKey key) => _paint.Remove(key);
+        public void Clear() => _paint.Clear();
     }
 }

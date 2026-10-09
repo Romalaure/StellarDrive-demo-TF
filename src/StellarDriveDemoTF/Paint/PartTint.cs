@@ -5,20 +5,30 @@ using UnityEngine;
 namespace StellarDriveDemoTF.Paint
 {
     /// <summary>
-    /// Applies paint to a part's visual by overriding the base color of its opaque materials
-    /// through property blocks, so shared materials stay untouched.
+    /// Applies paint to a part's visual through property blocks, so shared materials stay untouched.
+    /// Ship parts use the game's Custom/PlanetObject shader (_Color tint, _Roughness, _Metalness,
+    /// _EmissionColor); URP Lit names are set too for parts added by other mods.
     /// </summary>
     internal static class PartTint
     {
-        private static readonly int BaseColor = Shader.PropertyToID("_BaseColor");
-        private static readonly int LegacyColor = Shader.PropertyToID("_Color");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int RoughnessId = Shader.PropertyToID("_Roughness");
+        private static readonly int SmoothnessId = Shader.PropertyToID("_Smoothness");
+        private static readonly int MetalnessId = Shader.PropertyToID("_Metalness");
+        private static readonly int MetallicId = Shader.PropertyToID("_Metallic");
+        private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
 
-        // Materials whose look depends on their own color: glass, screens, holograms, lights
-        private static readonly string[] SkippedMaterialWords = { "glass", "screen", "display", "holo", "emissi", "light", "lamp", "fluid", "liquid" };
+        // Glow 100% gives this much HDR emission
+        private const float MaxGlow = 4f;
+
+        // Materials whose look depends on their own color: glass, screens, holograms, fluids
+        private static readonly string[] SkippedMaterialWords = { "glass", "screen", "display", "holo", "window", "fluid", "liquid", "laser", "text", "font", "sdf" };
+        private static readonly string[] SkippedShaderWords = { "hologram", "screen", "textmesh", "particles", "laser", "transparent", "window", "display", "warp", "skybox" };
 
         private static readonly MaterialPropertyBlock Block = new MaterialPropertyBlock();
 
-        /// <summary>Re-applies the stored color (or removes the tint) of a part, if its visual is loaded.</summary>
+        /// <summary>Re-applies the stored paint (or removes it) of a part, if its visual is loaded.</summary>
         public static void Refresh(PartKey key)
         {
             var ships = GameServices.ShipsClient;
@@ -33,44 +43,74 @@ namespace StellarDriveDemoTF.Paint
         {
             if (root == null)
                 return;
-            if (PaintNet.Client.TryGet(key, out Color32 color))
-                Apply(root, (Color)color);
+            if (PaintNet.Client.TryGet(key, out PaintData paint))
+                Apply(root, paint);
             else
-                Apply(root, null);
+                Clear(root);
         }
 
-        private static void Apply(GameObject root, Color? color)
+        private static void Apply(GameObject root, PaintData paint)
         {
-            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            Color color = paint.Color;
+            PaintFinish finish = paint.Finish;
+            foreach (Renderer renderer in Paintable(root))
             {
-                if (!(renderer is MeshRenderer) && !(renderer is SkinnedMeshRenderer))
-                    continue;
-
                 Material[] materials = renderer.sharedMaterials;
                 for (int i = 0; i < materials.Length; i++)
                 {
-                    if (!IsPaintable(materials[i]))
+                    Material material = materials[i];
+                    if (!IsPaintable(material))
                         continue;
 
                     renderer.GetPropertyBlock(Block, i);
-                    if (color.HasValue)
+                    Block.SetColor(ColorId, color);
+                    Block.SetColor(BaseColorId, color);
+                    if (finish.Enabled)
                     {
-                        Block.SetColor(BaseColor, color.Value);
-                        Block.SetColor(LegacyColor, color.Value);
-                        renderer.SetPropertyBlock(Block, i);
+                        Block.SetFloat(RoughnessId, 1f - finish.GlossValue);
+                        Block.SetFloat(SmoothnessId, finish.GlossValue);
+                        Block.SetFloat(MetalnessId, finish.MetalValue);
+                        Block.SetFloat(MetallicId, finish.MetalValue);
+                        Block.SetColor(EmissionColorId, color * (finish.GlowValue * MaxGlow));
                     }
                     else
                     {
+                        // Back to the material's own values
                         Block.Clear();
-                        renderer.SetPropertyBlock(Block, i);
+                        Block.SetColor(ColorId, color);
+                        Block.SetColor(BaseColorId, color);
                     }
+                    renderer.SetPropertyBlock(Block, i);
                 }
+            }
+        }
+
+        private static void Clear(GameObject root)
+        {
+            Block.Clear();
+            foreach (Renderer renderer in Paintable(root))
+            {
+                Material[] materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    if (IsPaintable(materials[i]))
+                        renderer.SetPropertyBlock(Block, i);
+                }
+            }
+        }
+
+        private static System.Collections.Generic.IEnumerable<Renderer> Paintable(GameObject root)
+        {
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer is MeshRenderer || renderer is SkinnedMeshRenderer)
+                    yield return renderer;
             }
         }
 
         private static bool IsPaintable(Material material)
         {
-            if (material == null || !material.HasProperty(BaseColor))
+            if (material == null || (!material.HasProperty(ColorId) && !material.HasProperty(BaseColorId)))
                 return false;
             // Transparent and overlay materials
             if (material.renderQueue >= 2450)
@@ -80,6 +120,12 @@ namespace StellarDriveDemoTF.Paint
             foreach (string word in SkippedMaterialWords)
             {
                 if (name.Contains(word))
+                    return false;
+            }
+            string shader = material.shader != null ? material.shader.name.ToLowerInvariant() : "";
+            foreach (string word in SkippedShaderWords)
+            {
+                if (shader.Contains(word))
                     return false;
             }
             return true;

@@ -3,7 +3,7 @@ using StellarDriveDemoTF;
 using StellarDriveDemoTF.Common;
 using StellarDriveDemoTF.Paint;
 
-[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.3.0", "Romalaure")]
+[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.4.0", "Romalaure")]
 [assembly: MelonGame("CuriousOwlGames", "StellarDrive")]
 
 namespace StellarDriveDemoTF
@@ -29,7 +29,13 @@ namespace StellarDriveDemoTF
         {
             PaintNet.Update();
             PaintToolGiver.Update();
+            PaintHud.Update();
             GameDump.Update();
+        }
+
+        public override void OnGUI()
+        {
+            PaintHud.Draw();
         }
     }
 }
