@@ -27,6 +27,13 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
 - **Corner lamps** (needs SDModKit): corner light, corner strip and corner spotlight, wedge
   shaped to sit in the angle between a ceiling (or floor) and a wall, lighting the room diagonally.
   Place them with their back against the wall.
+- **Infinite parts** (needs SDModKit), in a "TF Infini" build tab, cloned from the game's own
+  parts so power, fluid networks, chests, saving and sync work as usual:
+  - infinite generator: 20 kW forever, no wood;
+  - infinite oxygen tank and infinite ethanol tank: always full, they feed connected pipes
+    (thrusters, other tanks) without end;
+  - infinite resource chest: iron, glass, copper, aluminum, wood, ice, biofuel, water and stellar
+    shards that refill as you take them; the last slot is a bin.
 - **Mirrors** (needs SDModKit): rear-view mirror and wall mirror with real-time planar reflections.
   Only the nearest mirrors in view refresh (`MirrorMaxActive`, default 2), at a capped rate
   (`MirrorFps`, 30), reflecting up to `MirrorFarClip` meters (80), with an image sized to how big

@@ -159,7 +159,7 @@ namespace StellarDriveDemoTF.Lights
         private static readonly AccessTools.FieldRef<PartSettings, List<ItemInstance>> BuildingCost =
             AccessTools.FieldRefAccess<PartSettings, List<ItemInstance>>("buildingCost");
 
-        private static void SetCost(PartSettings settings, (uint Item, int Count)[] cost)
+        internal static void SetCost(PartSettings settings, (uint Item, int Count)[] cost)
         {
             ItemSettings[] items = Resources.FindObjectsOfTypeAll<ItemSettings>();
             var list = new List<ItemInstance>();

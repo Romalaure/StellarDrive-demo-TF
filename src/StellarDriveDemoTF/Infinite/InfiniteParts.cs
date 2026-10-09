@@ -1,0 +1,246 @@
+using System.Collections.Generic;
+using System.Reflection;
+using HarmonyLib;
+using Items.Model;
+using Research;
+using SDModKit.Game;
+using Ships;
+using Ships.Cables.Fluids;
+using Ships.Interface.Model.Parts;
+using Ships.Interface.Model.Parts.State;
+using Ships.Interface.Model.Parts.StateTypes;
+using Ships.Interface.Settings;
+using Ships.Parts.WoodPowerGenerator;
+using StellarDriveDemoTF.Lights;
+using UnityEngine;
+
+namespace StellarDriveDemoTF.Infinite
+{
+    /// <summary>
+    /// Creative parts that never run out, cloned from the game's own parts so every game system
+    /// (power and fluid networks, chests, saving, sync) handles them unchanged:
+    /// a generator that needs no wood, oxygen and ethanol tanks that stay full, and a resource
+    /// chest that refills itself. Small server-side patches keep them infinite.
+    /// Only call Register when SDModKit is loaded.
+    /// </summary>
+    internal static class InfiniteParts
+    {
+        public const string BuildTab = "TF Infini";
+
+        public const ushort Generator = 7121;
+        public const ushort OxygenTank = 7122;
+        public const ushort EthanolTank = 7123;
+        public const ushort ResourceChest = 7124;
+
+        /// <summary>Power of the infinite generator, in times a wood-fired generator (4 kW).</summary>
+        public const float GeneratorMultiplier = 5f;
+
+        private const uint Iron = 101, Glass = 102, Copper = 112;
+
+        /// <summary>What each slot of the resource chest holds; the last slot is a bin that deletes what goes in.</summary>
+        public static readonly uint[] ChestItems = { 101, 102, 112, 104, 110, 109, 100, 105, 103 };
+        public const byte ChestStack = 20;
+
+        private static readonly HashSet<ushort> Ids = new HashSet<ushort> { Generator, OxygenTank, EthanolTank, ResourceChest };
+
+        public static bool IsInfinite(ushort partId) => Ids.Contains(partId);
+
+        public static uint TankFluid(ushort partId) =>
+            partId == OxygenTank ? ItemsConstants.OxygenItemId : partId == EthanolTank ? ItemsConstants.EthanolItemId : 0u;
+
+        public static void Register()
+        {
+            BuildTabs.Declare(BuildTab, 51, InfiniteIcon.Create());
+
+            Add(Generator, "WoodPowerGenerator", "Générateur infini",
+                $"Générateur électrique qui tourne sans bois, pour toujours : {4 * GeneratorMultiplier:0} kW en continu sur son réseau électrique.",
+                new[] { (Iron, 8), (Copper, 6), (Glass, 2) }, new Color(0.55f, 0.85f, 1f));
+            Add(OxygenTank, "FluidTank", "Réservoir d'oxygène infini",
+                "Réservoir toujours plein d'oxygène : il alimente sans fin les tuyaux branchés (propulseurs, autres réservoirs...).",
+                new[] { (Iron, 6), (Glass, 4), (Copper, 2) }, new Color(0.55f, 0.8f, 1f));
+            Add(EthanolTank, "FluidTank", "Réservoir d'éthanol infini",
+                "Réservoir toujours plein d'éthanol : il alimente sans fin les tuyaux branchés (propulseurs, autres réservoirs...).",
+                new[] { (Iron, 6), (Glass, 4), (Copper, 2) }, new Color(1f, 0.75f, 0.4f));
+            Add(ResourceChest, "StorageChest", "Coffre de ressources infini",
+                "Coffre qui se remplit tout seul : fer, verre, cuivre, aluminium, bois, glace, biocarburant, eau et éclats stellaires à volonté. La dernière case est une poubelle : ce que tu y poses disparaît.",
+                new[] { (Iron, 10), (Copper, 4), (Glass, 2) }, new Color(1f, 0.85f, 0.35f));
+
+            TFMod.Log.Msg($"registered {Ids.Count} infinite parts in the '{BuildTab}' build tab");
+        }
+
+        private static void Add(ushort id, string donor, string label, string description, (uint, int)[] cost, Color tint)
+        {
+            CustomParts.Register(new CustomPartDefinition
+            {
+                Id = id,
+                Name = "TF_" + id,
+                Donor = donor,
+                BuildTab = BuildTab,
+                BuildRow = 0,
+                Configure = (settings, prefab) =>
+                {
+                    settings.fullLabel = label;
+                    settings.description = description;
+                    settings.localizedDescription = null;
+                    LampParts.SetCost(settings, cost);
+                    Tint(prefab, tint);
+                }
+            });
+        }
+
+        // Tinted copies of the donor's materials, so the infinite version is easy to tell apart
+        private static void Tint(GameObject prefab, Color tint)
+        {
+            int colorId = Shader.PropertyToID("_Color");
+            int baseColorId = Shader.PropertyToID("_BaseColor");
+            var copies = new Dictionary<Material, Material>();
+            foreach (Renderer renderer in prefab.GetComponentsInChildren<Renderer>(true))
+            {
+                Material[] materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    Material original = materials[i];
+                    if (original == null || original.renderQueue >= 2450)
+                        continue;
+                    if (!copies.TryGetValue(original, out Material copy))
+                    {
+                        copy = new Material(original) { name = original.name + "_TFInfinite" };
+                        if (copy.HasProperty(colorId))
+                            copy.SetColor(colorId, copy.GetColor(colorId) * tint);
+                        if (copy.HasProperty(baseColorId))
+                            copy.SetColor(baseColorId, copy.GetColor(baseColorId) * tint);
+                        copies[original] = copy;
+                    }
+                    materials[i] = copy;
+                }
+                renderer.sharedMaterials = materials;
+            }
+        }
+
+        public static InventorySlot ChestSlot(byte slotId) =>
+            slotId < ChestItems.Length
+                ? new InventorySlot { HasItem = true, ItemId = ChestItems[slotId], Quantity = ChestStack }
+                : new InventorySlot { HasItem = false };
+    }
+
+    /// <summary>New infinite parts start full: tanks with their fluid, the chest with its resources.</summary>
+    [HarmonyPatch(typeof(PartStateFactory), nameof(PartStateFactory.BuildDefaultState))]
+    internal static class InfiniteDefaultStatePatch
+    {
+        private static void Postfix(PartSettings partSettings, ref IStatefulPartState __result)
+        {
+            if (partSettings == null || !InfiniteParts.IsInfinite(partSettings.id))
+                return;
+            uint fluid = InfiniteParts.TankFluid(partSettings.id);
+            if (fluid != 0 && __result is FluidTankState tank)
+            {
+                __result = (IStatefulPartState)tank.WithFluid(fluid, FluidTankState.Capacity, 0f);
+            }
+            else if (partSettings.id == InfiniteParts.ResourceChest && __result is StorageState chest)
+            {
+                IStoragePart filled = chest;
+                for (byte slot = 0; slot < InfiniteParts.ChestItems.Length; slot++)
+                    filled = filled.WithUpdatedSlot(slot, InfiniteParts.ChestSlot(slot));
+                __result = (IStatefulPartState)filled;
+            }
+        }
+    }
+
+    /// <summary>The infinite generator always runs at full power, with no wood.</summary>
+    [HarmonyPatch(typeof(PowerGeneratorUpdaters), "CalculateProductionCapacity")]
+    internal static class InfiniteGeneratorPatch
+    {
+        private static bool Prefix(float deltaTime, StatefulPart part, ref float __result)
+        {
+            if (part?.Settings == null || part.Settings.id != InfiniteParts.Generator)
+                return true;
+            __result = deltaTime * WoodPowerGeneratorState.PowerProductionRate * InfiniteParts.GeneratorMultiplier;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// After each fluid network step, an infinite tank is put back to full with its own fluid, so
+    /// whatever the network drew from it is created out of nothing.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class InfiniteTankPatch
+    {
+        private static readonly System.Type Container = AccessTools.Inner(typeof(FluidGroupServerState), "PartFluidContainer");
+        private static readonly FieldInfo PartField = AccessTools.Field(Container, "_part");
+        private static readonly FieldInfo FluidField = AccessTools.Field(Container, "_fluidItemId");
+        private static readonly FieldInfo QuantityField = AccessTools.Field(Container, "_fluidQuantity");
+
+        private static MethodBase TargetMethod() => AccessTools.Method(Container, "CommitChanges");
+
+        private static void Prefix(object __instance)
+        {
+            var part = PartField.GetValue(__instance) as StatefulPart;
+            if (part?.Settings == null)
+                return;
+            uint fluid = InfiniteParts.TankFluid(part.Settings.id);
+            if (fluid == 0)
+                return;
+            FluidField.SetValue(__instance, fluid);
+            QuantityField.SetValue(__instance, FluidTankState.Capacity);
+        }
+    }
+
+    /// <summary>
+    /// Taking items out of the resource chest leaves its slots full; the last slot is a bin.
+    /// Runs on the server, where chest contents are decided.
+    /// </summary>
+    [HarmonyPatch(typeof(TrackedShipServer), nameof(TrackedShipServer.SetChestSlot))]
+    internal static class InfiniteChestPatch
+    {
+        private static void Prefix(TrackedShipServer __instance, ushort partId, byte slotId, ref InventorySlot slotData)
+        {
+            if (__instance.TryGetStatefulPart(partId, out StatefulPart part) && part.Settings != null && part.Settings.id == InfiniteParts.ResourceChest)
+                slotData = InfiniteParts.ChestSlot(slotId);
+        }
+    }
+
+    /// <summary>Infinite parts are in no research node, so the build menu would keep them locked forever.</summary>
+    [HarmonyPatch(typeof(ResearchClientProxy), nameof(ResearchClientProxy.IsPartUnlocked))]
+    internal static class InfiniteUnlockPatch
+    {
+        private static void Postfix(PartSettings part, ref bool __result)
+        {
+            if (!__result && part != null && InfiniteParts.IsInfinite(part.id))
+                __result = true;
+        }
+    }
+
+    /// <summary>Build tab icon: an infinity sign, drawn in code.</summary>
+    internal static class InfiniteIcon
+    {
+        public static Texture2D Create()
+        {
+            const int size = 64;
+            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "TF_InfiniteIcon", hideFlags = HideFlags.HideAndDontSave };
+            var color = new Color(0.55f, 0.9f, 1f, 1f);
+            var pixels = new Color[size * size];
+            // Lemniscate of Bernoulli, drawn as a thick anti-aliased stroke
+            var curve = new List<Vector2>();
+            for (int i = 0; i < 400; i++)
+            {
+                float t = i / 400f * Mathf.PI * 2f;
+                float d = 1f + Mathf.Sin(t) * Mathf.Sin(t);
+                curve.Add(new Vector2(32f + 26f * Mathf.Cos(t) / d, 32f + 26f * Mathf.Sin(t) * Mathf.Cos(t) / d));
+            }
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                var p = new Vector2(x + 0.5f, y + 0.5f);
+                float best = float.MaxValue;
+                foreach (Vector2 c in curve)
+                    best = Mathf.Min(best, (c - p).sqrMagnitude);
+                float alpha = Mathf.Clamp01(4.5f - Mathf.Sqrt(best));
+                pixels[y * size + x] = new Color(color.r, color.g, color.b, alpha);
+            }
+            texture.SetPixels(pixels);
+            texture.Apply();
+            return texture;
+        }
+    }
+}

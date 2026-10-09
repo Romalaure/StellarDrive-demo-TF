@@ -26,15 +26,15 @@ namespace StellarDriveDemoTF
 
         public override void OnLateInitializeMelon()
         {
-            // Lamps are new parts built with SDModKit; everything else works without it
+            // Lamps, mirrors and infinite parts are new parts built with SDModKit; paint works without it
             if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "SDModKit"))
-                RegisterLamps();
+                RegisterParts();
             else
-                Log.Warning("SDModKit is not installed: lamps are disabled");
+                Log.Warning("SDModKit is not installed: lamps, mirrors and infinite parts are disabled");
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static void RegisterLamps()
+        private static void RegisterParts()
         {
             try
             {
@@ -43,6 +43,14 @@ namespace StellarDriveDemoTF
             catch (Exception e)
             {
                 Log.Error("could not register lamps: " + e);
+            }
+            try
+            {
+                Infinite.InfiniteParts.Register();
+            }
+            catch (Exception e)
+            {
+                Log.Error("could not register infinite parts: " + e);
             }
         }
 
