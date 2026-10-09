@@ -6,7 +6,7 @@
     <Nullable>disable</Nullable>
     <AssemblyName>StellarDriveDemoTF</AssemblyName>
     <RootNamespace>StellarDriveDemoTF</RootNamespace>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <!-- Game assemblies reference netstandard facades; silence the resulting version-conflict noise -->
@@ -24,6 +24,11 @@
   <ItemGroup>
     <Reference Include="MelonLoader" HintPath="$(MelonLoaderPath)\MelonLoader.dll" Private="false" />
     <Reference Include="0Harmony" HintPath="$(MelonLoaderPath)\0Harmony.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- SDModKit (optional at runtime, needed for the lamps): install it in the game with StellarModManager -->
+  <ItemGroup>
+    <Reference Include="SDModKit" HintPath="$(GamePath)\Mods\SDModKit.dll" Private="false" />
   </ItemGroup>
 
   <!-- Every game and Unity assembly from the local install (BCL facades excluded), never copied -->

@@ -1,6 +1,7 @@
 using Core.Services;
 using Players.Interface.Services;
 using Players.Services;
+using Ships.Cables;
 using Ships.Services;
 using UnityEngine;
 
@@ -16,6 +17,9 @@ namespace StellarDriveDemoTF.Common
         private static readonly CachedService<ShipsServerTracker> ShipsServerCache = new CachedService<ShipsServerTracker>();
         private static readonly CachedService<PlayersServerTracker> PlayersServerCache = new CachedService<PlayersServerTracker>();
         private static readonly CachedService<IPlayerPaintToolSelectionTracker> PaintSelectionCache = new CachedService<IPlayerPaintToolSelectionTracker>();
+        private static readonly CachedService<CablesClientTracker> CablesClientCache = new CachedService<CablesClientTracker>();
+
+        public static CablesClientTracker CablesClient => CablesClientCache.Get();
 
         public static ShipsClientTracker ShipsClient => ShipsClientCache.Get();
         public static ShipsServerTracker ShipsServer => ShipsServerCache.Get();
@@ -28,6 +32,7 @@ namespace StellarDriveDemoTF.Common
             ShipsServerCache.Reset();
             PlayersServerCache.Reset();
             PaintSelectionCache.Reset();
+            CablesClientCache.Reset();
         }
 
         private sealed class CachedService<T> where T : class

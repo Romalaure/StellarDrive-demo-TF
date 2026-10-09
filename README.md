@@ -11,12 +11,20 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
 - **Spray gun model**: replaces the placeholder paint tool model with a spray gun whose cup and
   nozzle show the selected color.
 
+- **Paint HUD**: a card while holding the paint tool, and a side panel next to the game's paint
+  menu (right click) with quick colors, hex input, wall side mode (one face or both), finishes
+  (gloss, metal, glow) for placed parts, and presets saved in `UserData/TF/paint-presets.json`.
+- **Lamps** (needs SDModKit): ceiling light, wall light, spotlight and light strip in a new
+  "Éclairage" build tab. Lit while no signal cable is plugged in; with one they follow the signal
+  (0 = off, 1 = full). Painting a lamp sets its light color.
+
 Settings live in `UserData/MelonPreferences.cfg` under `[TF]`.
 
 ## Requirements
 
 - StellarDrive Demo with MelonLoader 0.7.x installed
 - .NET SDK 8+ (builds a .NET Framework 4.7.2 assembly)
+- SDModKit installed in the game's `Mods` folder (referenced at build time, optional at runtime)
 
 ## Build
 

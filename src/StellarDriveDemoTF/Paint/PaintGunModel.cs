@@ -37,7 +37,7 @@ namespace StellarDriveDemoTF.Paint
             if (oldRenderer == null)
                 return;
 
-            EnsureAssets(oldRenderer.sharedMaterial);
+            EnsureAssets();
 
             var root = new GameObject(ModelName);
             root.layer = oldMesh.gameObject.layer;
@@ -68,7 +68,7 @@ namespace StellarDriveDemoTF.Paint
             root.AddComponent<PaintGunColor>();
         }
 
-        private static void EnsureAssets(Material template)
+        private static void EnsureAssets()
         {
             if (_meshes == null)
                 _meshes = BuildMeshes();
@@ -76,32 +76,12 @@ namespace StellarDriveDemoTF.Paint
             if (Materials.TryGetValue(Part.Body, out Material existing) && existing != null)
                 return;
             Materials.Clear();
-            Materials[Part.Body] = MakeMaterial(template, Part.Body, new Color(0.72f, 0.75f, 0.79f), 0.55f, 0.55f);
-            Materials[Part.Dark] = MakeMaterial(template, Part.Dark, new Color(0.11f, 0.115f, 0.125f), 0.1f, 0.3f);
-            Materials[Part.Accent] = MakeMaterial(template, Part.Accent, new Color(0.96f, 0.47f, 0.08f), 0.2f, 0.5f);
-            Materials[Part.Chrome] = MakeMaterial(template, Part.Chrome, new Color(0.86f, 0.87f, 0.9f), 1f, 0.85f);
-            Materials[Part.Paint] = MakeMaterial(template, Part.Paint, DefaultPaint, 0f, 0.8f);
-            Materials[Part.Glow] = MakeMaterial(template, Part.Glow, DefaultPaint, 0f, 0.9f);
-            Materials[Part.Glow].EnableKeyword("_EMISSION");
-            Materials[Part.Glow].globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-            Materials[Part.Glow].SetColor("_EmissionColor", DefaultPaint * 1.5f);
-        }
-
-        private static Material MakeMaterial(Material template, Part part, Color color, float metallic, float smoothness)
-        {
-            Material material = template != null ? new Material(template) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
-            material.name = ModelName + "_" + part;
-            if (material.HasProperty("_BaseMap"))
-                material.SetTexture("_BaseMap", null);
-            if (material.HasProperty("_MainTex"))
-                material.SetTexture("_MainTex", null);
-            material.SetColor("_BaseColor", color);
-            material.SetColor("_Color", color);
-            if (material.HasProperty("_Metallic"))
-                material.SetFloat("_Metallic", metallic);
-            if (material.HasProperty("_Smoothness"))
-                material.SetFloat("_Smoothness", smoothness);
-            return material;
+            Materials[Part.Body] = LitMaterials.Get(ModelName + "_Body", new Color(0.72f, 0.75f, 0.79f), 0.55f, 0.55f);
+            Materials[Part.Dark] = LitMaterials.Get(ModelName + "_Dark", new Color(0.11f, 0.115f, 0.125f), 0.1f, 0.3f);
+            Materials[Part.Accent] = LitMaterials.Get(ModelName + "_Accent", new Color(0.96f, 0.47f, 0.08f), 0.2f, 0.5f);
+            Materials[Part.Chrome] = LitMaterials.Get(ModelName + "_Chrome", new Color(0.86f, 0.87f, 0.9f), 1f, 0.85f);
+            Materials[Part.Paint] = LitMaterials.Get(ModelName + "_Paint", DefaultPaint, 0f, 0.8f);
+            Materials[Part.Glow] = LitMaterials.Get(ModelName + "_Glow", DefaultPaint, 0f, 0.9f, DefaultPaint * 1.5f);
         }
 
         private static Dictionary<Part, Mesh> BuildMeshes()

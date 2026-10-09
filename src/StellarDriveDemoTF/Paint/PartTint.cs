@@ -103,7 +103,8 @@ namespace StellarDriveDemoTF.Paint
         {
             foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
             {
-                if (renderer is MeshRenderer || renderer is SkinnedMeshRenderer)
+                // Mod-built parts can opt out (lamps take the paint as light color instead)
+                if ((renderer is MeshRenderer || renderer is SkinnedMeshRenderer) && !renderer.gameObject.name.StartsWith("TF_NoPaint"))
                     yield return renderer;
             }
         }

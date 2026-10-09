@@ -1,0 +1,149 @@
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using HarmonyLib;
+using Items.Model;
+using SDModKit.Game;
+using Ships.Interface.Model.Parts;
+using Ships.Interface.Model.Parts.Common;
+using Ships.Interface.Settings;
+using Ships.Parts.SignalDisplay;
+using StellarDriveDemoTF.Common;
+using UnityEngine;
+using UnityEngine.Rendering;
+
+namespace StellarDriveDemoTF.Lights
+{
+    /// <summary>
+    /// Registers the lamps as new ship parts through SDModKit, which clones a donor part (here the
+    /// Signal Display, for its signal socket and synced signal value) under a new id and adds it to
+    /// the build menu. Only call this when SDModKit is loaded.
+    /// </summary>
+    internal static class LampParts
+    {
+        public const string BuildTab = "Éclairage";
+        private const string Donor = "SignalDisplay";
+
+        private static readonly Dictionary<LampGroup, Material> Materials = new Dictionary<LampGroup, Material>();
+
+        public static void Register()
+        {
+            BuildTabs.Declare(BuildTab, 50, LampIcon.Create());
+            foreach (LampSpec lamp in LampCatalog.All)
+            {
+                LampSpec spec = lamp;
+                CustomParts.Register(new CustomPartDefinition
+                {
+                    Id = spec.Id,
+                    Name = "TF_" + spec.Id,
+                    Donor = Donor,
+                    BuildTab = BuildTab,
+                    BuildRow = 0,
+                    Configure = (settings, prefab) => Configure(spec, settings, prefab)
+                });
+            }
+            TFMod.Log.Msg($"registered {LampCatalog.All.Length} lamps in the '{BuildTab}' build tab");
+        }
+
+        private static void Configure(LampSpec spec, PartSettings settings, GameObject prefab)
+        {
+            settings.fullLabel = spec.Label;
+            settings.description = spec.Description;
+            settings.localizedDescription = null;
+            settings.mass = spec.Mass;
+            SetCost(settings, spec.Cost);
+
+            Transform visuals = prefab.transform.Find("Visuals");
+            Object.DestroyImmediate(visuals.GetComponent<SignalDisplayVisuals>());
+            foreach (Transform child in visuals.Cast<Transform>().ToList())
+                Object.DestroyImmediate(child.gameObject);
+
+            BuildModel(spec, visuals);
+            visuals.gameObject.AddComponent<LampVisuals>();
+
+            var bounds = prefab.GetComponent<ShipPartBounds>();
+            if (bounds != null)
+            {
+                bounds.center = spec.BoundsCenter;
+                bounds.bounds = spec.BoundsSize;
+            }
+
+            // The interaction collider (look at it, pick it up) covers the whole lamp
+            Transform interactions = prefab.transform.Find("Interactions");
+            if (interactions != null)
+            {
+                foreach (BoxCollider box in interactions.GetComponentsInChildren<BoxCollider>(true))
+                {
+                    box.transform.localPosition = spec.BoundsCenter;
+                    box.transform.localRotation = Quaternion.identity;
+                    box.center = Vector3.zero;
+                    box.size = spec.BoundsSize;
+                }
+            }
+
+            // SDModKit then seats the socket onto the bounds
+            foreach (SocketObject socket in prefab.GetComponentsInChildren<SocketObject>(true))
+                socket.transform.localPosition = spec.SocketPosition;
+        }
+
+        private static void BuildModel(LampSpec spec, Transform visuals)
+        {
+            EnsureMaterials();
+            int layer = visuals.gameObject.layer;
+            foreach (KeyValuePair<LampGroup, MeshBuilder> entry in spec.BuildShapes())
+            {
+                // Lamp bodies keep their look; painting a lamp colors its light instead
+                string name = entry.Key == LampGroup.Diffuser ? LampVisuals.DiffuserName : "TF_NoPaint_" + entry.Key;
+                var child = new GameObject(name) { layer = layer };
+                child.transform.SetParent(visuals, false);
+                child.AddComponent<MeshFilter>().sharedMesh = entry.Value.Build("TF_Lamp" + spec.Id + "_" + entry.Key);
+                var renderer = child.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = Materials[entry.Key];
+                renderer.shadowCastingMode = entry.Key == LampGroup.Diffuser ? ShadowCastingMode.Off : ShadowCastingMode.On;
+            }
+
+            var lightObject = new GameObject(LampVisuals.LightName) { layer = layer };
+            lightObject.transform.SetParent(visuals, false);
+            lightObject.transform.localPosition = spec.LightPosition;
+            // Lights shine along their forward axis; lamps shine out of their mounting surface (+y)
+            lightObject.transform.localRotation = Quaternion.LookRotation(Vector3.up, Vector3.forward);
+            var light = lightObject.AddComponent<Light>();
+            light.type = spec.LightType;
+            light.range = spec.Range;
+            light.intensity = spec.Intensity;
+            light.color = LampCatalog.DefaultLight;
+            light.shadows = LightShadows.None;
+            if (spec.LightType == LightType.Spot)
+            {
+                light.spotAngle = spec.SpotAngle;
+                light.innerSpotAngle = spec.SpotAngle * 0.6f;
+            }
+        }
+
+        private static void EnsureMaterials()
+        {
+            if (Materials.Count > 0 && Materials.Values.All(m => m != null))
+                return;
+            Materials[LampGroup.Frame] = LitMaterials.Get("TF_LampFrame", new Color(0.2f, 0.21f, 0.23f), 0.6f, 0.45f);
+            Materials[LampGroup.Trim] = LitMaterials.Get("TF_LampTrim", new Color(0.82f, 0.83f, 0.86f), 1f, 0.8f);
+            // "glass" in the name keeps the paint tool from tinting it
+            Materials[LampGroup.Diffuser] = LitMaterials.Get("TF_LampGlass", new Color(0.95f, 0.93f, 0.88f), 0f, 0.9f, LampCatalog.DefaultLight * 3f);
+        }
+
+        private static readonly AccessTools.FieldRef<PartSettings, List<ItemInstance>> BuildingCost =
+            AccessTools.FieldRefAccess<PartSettings, List<ItemInstance>>("buildingCost");
+
+        private static void SetCost(PartSettings settings, (uint Item, int Count)[] cost)
+        {
+            ItemSettings[] items = Resources.FindObjectsOfTypeAll<ItemSettings>();
+            var list = new List<ItemInstance>();
+            foreach ((uint item, int count) in cost)
+            {
+                ItemSettings itemSettings = items.FirstOrDefault(i => i != null && i.id == item);
+                if (itemSettings != null)
+                    list.Add(new ItemInstance(itemSettings, count));
+            }
+            BuildingCost(settings) = list;
+        }
+    }
+}

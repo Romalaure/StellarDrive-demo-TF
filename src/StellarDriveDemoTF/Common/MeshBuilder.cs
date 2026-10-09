@@ -24,6 +24,17 @@ namespace StellarDriveDemoTF.Common
             return mesh;
         }
 
+        /// <summary>Copies another builder's triangles, moved by an offset.</summary>
+        public void Append(MeshBuilder other, Vector3 offset)
+        {
+            int start = _vertices.Count;
+            foreach (Vector3 v in other._vertices)
+                _vertices.Add(v + offset);
+            _normals.AddRange(other._normals);
+            foreach (int index in other._triangles)
+                _triangles.Add(start + index);
+        }
+
         /// <summary>Wavefront OBJ text, for previewing models outside the game.</summary>
         public string ToObj()
         {
