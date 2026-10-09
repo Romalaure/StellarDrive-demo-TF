@@ -24,6 +24,17 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
 
 Settings live in `UserData/MelonPreferences.cfg` under `[TF]`.
 
+## Install
+
+**With StellarModManager**: once the mod is listed in the online repository, install it from the
+"Online" tab, then press "Install to game". Also install **SDModKit** (needed for lamps and mirrors).
+
+**By hand**: download `StellarDrive-demo-TF.zip` from the
+[latest release](https://github.com/Romalaure/StellarDrive-demo-TF/releases/latest) and copy
+`Mods/StellarDriveDemoTF.dll` into the game's `Mods` folder (MelonLoader 0.7 required).
+
+Every player in a multiplayer session needs the mod.
+
 ## Requirements
 
 - StellarDrive Demo with MelonLoader 0.7.x installed

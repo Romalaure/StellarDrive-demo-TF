@@ -3,5 +3,11 @@
     "name": "StellarDrive Demo TF",
     "author": "Romalaure",
     "version": "0.6.0",
-    "description": "TF group mod. Paint tool: unlocks the hidden paint gun (F8) and lets it color doors, machines and every placed part, saved and synced in multiplayer."
+    "description": "Mod du groupe TF. Pistolet a peinture (F8) : peint murs, sols, portes, machines et toutes les pieces, avec finitions (brillance, metal, neon), prereglages et nouveau HUD. Nouvelles pieces (onglet TF) : plafonnier, applique, projecteur, tube neon qui s'adaptent a la lumiere ambiante, retroviseur et grand miroir en temps reel. Necessite SDModKit pour les lampes et miroirs. Tous les joueurs doivent avoir le mod.",
+    "thumbnail": "thumbnail.png",
+    "images": [
+        "gun.png",
+        "lamps.png",
+        "mirrors.png"
+    ]
 }
