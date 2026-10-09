@@ -1,0 +1,292 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using FishNet;
+using FishNet.Broadcast;
+using FishNet.Connection;
+using FishNet.Managing;
+using FishNet.Serializing;
+using FishNet.Transporting;
+using Ships.Interface.Model.State;
+using StellarDriveDemoTF.Common;
+using UnityEngine;
+
+namespace StellarDriveDemoTF.Paint
+{
+    /// <summary>
+    /// Server-authoritative paint for floating parts. Clients ask the server to paint, the server
+    /// validates, stores and tells every client. Clients ask for the full set once after joining.
+    /// Every player needs the mod to see the colors; the host needs it for painting to work at all.
+    /// </summary>
+    internal static class PaintNet
+    {
+        private struct PaintRequest : IBroadcast
+        {
+            public uint ShipId;
+            public ushort PartId;
+            public Color32 Color;
+            public bool ReplaceSame;
+        }
+
+        private struct PaintUpdate : IBroadcast
+        {
+            public uint ShipId;
+            public ushort PartId;
+            public bool Cleared;
+            public Color32 Color;
+        }
+
+        private struct SyncRequest : IBroadcast
+        {
+            public byte Unused;
+        }
+
+        private struct GiveToolRequest : IBroadcast
+        {
+            public byte Unused;
+        }
+
+        /// <summary>Authoritative colors, only filled on the host.</summary>
+        public static readonly PaintStore Server = new PaintStore();
+
+        /// <summary>Colors this client knows about, used for rendering.</summary>
+        public static readonly PaintStore Client = new PaintStore();
+
+        private static NetworkManager _network;
+        private static bool _clientWasStarted;
+        private static bool _syncRequested;
+        private static float _nextSyncAttempt;
+
+        public static void InstallSerializers()
+        {
+            GenericWriter<PaintRequest>.SetWrite((writer, m) =>
+            {
+                writer.WriteUInt32(m.ShipId);
+                writer.WriteUInt16(m.PartId);
+                WriteColor(writer, m.Color);
+                writer.WriteBoolean(m.ReplaceSame);
+            });
+            GenericReader<PaintRequest>.SetRead(reader => new PaintRequest
+            {
+                ShipId = reader.ReadUInt32(),
+                PartId = reader.ReadUInt16(),
+                Color = ReadColor(reader),
+                ReplaceSame = reader.ReadBoolean()
+            });
+
+            GenericWriter<PaintUpdate>.SetWrite((writer, m) =>
+            {
+                writer.WriteUInt32(m.ShipId);
+                writer.WriteUInt16(m.PartId);
+                writer.WriteBoolean(m.Cleared);
+                WriteColor(writer, m.Color);
+            });
+            GenericReader<PaintUpdate>.SetRead(reader => new PaintUpdate
+            {
+                ShipId = reader.ReadUInt32(),
+                PartId = reader.ReadUInt16(),
+                Cleared = reader.ReadBoolean(),
+                Color = ReadColor(reader)
+            });
+
+            GenericWriter<SyncRequest>.SetWrite((writer, m) => writer.WriteUInt8Unpacked(m.Unused));
+            GenericReader<SyncRequest>.SetRead(reader => new SyncRequest { Unused = reader.ReadUInt8Unpacked() });
+
+            GenericWriter<GiveToolRequest>.SetWrite((writer, m) => writer.WriteUInt8Unpacked(m.Unused));
+            GenericReader<GiveToolRequest>.SetRead(reader => new GiveToolRequest { Unused = reader.ReadUInt8Unpacked() });
+        }
+
+        public static void Update()
+        {
+            EnsureHandlers();
+
+            NetworkManager network = _network;
+            bool clientStarted = network != null && network.IsClientStarted;
+            if (!clientStarted)
+            {
+                if (_clientWasStarted)
+                {
+                    Client.Clear();
+                    _syncRequested = false;
+                }
+                _clientWasStarted = false;
+                return;
+            }
+            _clientWasStarted = true;
+
+            if (_syncRequested || Time.unscaledTime < _nextSyncAttempt)
+                return;
+            _nextSyncAttempt = Time.unscaledTime + 1f;
+
+            if (network.ClientManager.Connection == null || !network.ClientManager.Connection.IsAuthenticated)
+                return;
+            if (GameServices.ShipsClient == null)
+                return;
+
+            _syncRequested = true;
+            SendToServer(new SyncRequest(), OnSyncRequest);
+        }
+
+        /// <summary>Called by the paint tool on this client.</summary>
+        public static void RequestPaint(PartKey key, Color color, bool replaceSame)
+        {
+            SendToServer(new PaintRequest
+            {
+                ShipId = key.ShipId,
+                PartId = key.PartId,
+                Color = ToColor32(color),
+                ReplaceSame = replaceSame
+            }, OnPaintRequest);
+        }
+
+        /// <summary>Asks the server for a paint tool, if this player has none.</summary>
+        public static void RequestPaintTool()
+        {
+            SendToServer(new GiveToolRequest(), OnGiveToolRequest);
+        }
+
+        /// <summary>A part was removed from its ship; forget its color on whichever side this runs.</summary>
+        public static void ForgetPart(PartKey key)
+        {
+            Server.Remove(key);
+            Client.Remove(key);
+        }
+
+        private static void EnsureHandlers()
+        {
+            NetworkManager network = InstanceFinder.NetworkManager;
+            if (network == _network)
+                return;
+
+            if (_network != null)
+            {
+                try
+                {
+                    _network.ServerManager.UnregisterBroadcast<PaintRequest>(OnPaintRequest);
+                    _network.ServerManager.UnregisterBroadcast<SyncRequest>(OnSyncRequest);
+                    _network.ServerManager.UnregisterBroadcast<GiveToolRequest>(OnGiveToolRequest);
+                    _network.ClientManager.UnregisterBroadcast<PaintUpdate>(OnPaintUpdate);
+                }
+                catch (Exception)
+                {
+                    // the old manager is being torn down
+                }
+            }
+
+            _network = network;
+            _syncRequested = false;
+            Client.Clear();
+            if (network == null)
+                return;
+
+            network.ServerManager.RegisterBroadcast<PaintRequest>(OnPaintRequest, true);
+            network.ServerManager.RegisterBroadcast<SyncRequest>(OnSyncRequest, true);
+            network.ServerManager.RegisterBroadcast<GiveToolRequest>(OnGiveToolRequest, true);
+            network.ClientManager.RegisterBroadcast<PaintUpdate>(OnPaintUpdate);
+        }
+
+        private static void OnGiveToolRequest(NetworkConnection sender, GiveToolRequest request, Channel channel)
+        {
+            PaintToolGiver.ServerGive(sender);
+        }
+
+        // On the host, handle our own requests directly instead of looping through the transport
+        private static void SendToServer<T>(T message, Action<NetworkConnection, T, Channel> serverHandler) where T : struct, IBroadcast
+        {
+            NetworkManager network = _network;
+            if (network == null)
+                return;
+
+            if (network.IsServerStarted)
+            {
+                NetworkConnection local = null;
+                NetworkConnection clientSide = network.ClientManager.Connection;
+                if (clientSide != null)
+                    network.ServerManager.Clients.TryGetValue(clientSide.ClientId, out local);
+                serverHandler(local, message, Channel.Reliable);
+            }
+            else if (network.IsClientStarted)
+            {
+                network.ClientManager.Broadcast(message);
+            }
+        }
+
+        private static void OnPaintRequest(NetworkConnection sender, PaintRequest request, Channel channel)
+        {
+            if (!Settings.PaintAllParts.Value)
+                return;
+
+            var ships = GameServices.ShipsServer;
+            if (ships == null || !ships.TryGetShip(request.ShipId, out IShipStateRead ship))
+                return;
+            if (!ship.TryGetStatefulPart(request.PartId, out _))
+                return;
+
+            var target = new PartKey(request.ShipId, request.PartId);
+            List<PartKey> toPaint;
+            if (request.ReplaceSame)
+            {
+                // Same rule as the game's hull "replace all identical colors": every part of this ship
+                // sharing the clicked part's color (or every unpainted part, if it is unpainted)
+                bool targetPainted = Server.TryGet(target, out Color32 targetColor);
+                toPaint = ship.StatefulParts
+                    .Select(p => new PartKey(request.ShipId, p.Id))
+                    .Where(k => Server.TryGet(k, out Color32 c) ? targetPainted && PaintStore.SameRgb(c, targetColor) : !targetPainted)
+                    .ToList();
+            }
+            else
+            {
+                toPaint = new List<PartKey> { target };
+            }
+
+            foreach (PartKey key in toPaint)
+            {
+                Server.Set(key, request.Color);
+                _network.ServerManager.Broadcast(new PaintUpdate { ShipId = key.ShipId, PartId = key.PartId, Color = request.Color });
+            }
+        }
+
+        private static void OnSyncRequest(NetworkConnection sender, SyncRequest request, Channel channel)
+        {
+            if (sender == null)
+                return;
+            foreach (KeyValuePair<PartKey, Color32> entry in Server.All.ToList())
+            {
+                _network.ServerManager.Broadcast(sender, new PaintUpdate
+                {
+                    ShipId = entry.Key.ShipId,
+                    PartId = entry.Key.PartId,
+                    Color = entry.Value
+                });
+            }
+        }
+
+        private static void OnPaintUpdate(PaintUpdate update, Channel channel)
+        {
+            var key = new PartKey(update.ShipId, update.PartId);
+            if (update.Cleared)
+                Client.Remove(key);
+            else
+                Client.Set(key, update.Color);
+            PartTint.Refresh(key);
+        }
+
+        private static void WriteColor(Writer writer, Color32 color)
+        {
+            writer.WriteUInt8Unpacked(color.r);
+            writer.WriteUInt8Unpacked(color.g);
+            writer.WriteUInt8Unpacked(color.b);
+        }
+
+        private static Color32 ReadColor(Reader reader)
+        {
+            return new Color32(reader.ReadUInt8Unpacked(), reader.ReadUInt8Unpacked(), reader.ReadUInt8Unpacked(), 255);
+        }
+
+        private static Color32 ToColor32(Color color)
+        {
+            // Same byte conversion the game uses for hull paint
+            return new Color32((byte)(color.r * 255f), (byte)(color.g * 255f), (byte)(color.b * 255f), 255);
+        }
+    }
+}
