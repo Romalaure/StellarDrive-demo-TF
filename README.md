@@ -31,7 +31,7 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
     tilted 30 degrees (rotate it while placing to aim). Press **F9** for the camera tablet: it
     shows the selected camera's live image (left/right arrows switch camera) and **P** takes out
     the build tool with a camera selected to place a new one. Cameras only render while the tablet
-    is open (, 20; , 640).
+    is open (`CameraFps`, 20; `CameraResolution`, 640).
   - **Chairs**: rustic chair, futuristic seat, copilot seat, club armchair, bar stool, bench,
     office chair and shuttle passenger seat. They are built on the game's pilot seat, so you sit in
     them the same way, but they have no effect on the ship: next to no weight, no plug, flight
