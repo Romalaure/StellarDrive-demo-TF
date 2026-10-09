@@ -17,7 +17,6 @@ namespace StellarDriveDemoTF.Mirrors
         public (uint Item, int Count)[] Cost;
         public Vector3 BoundsCenter;
         public Vector3 BoundsSize;
-        public Vector3 SocketPosition;
         /// <summary>Glass size along local x and z.</summary>
         public Vector2 GlassSize;
         /// <summary>Height of the glass above the mounting surface.</summary>
@@ -55,7 +54,6 @@ namespace StellarDriveDemoTF.Mirrors
                 GlassHeight = 0.112f,
                 BoundsCenter = new Vector3(0f, 0.06f, 0f),
                 BoundsSize = new Vector3(0.52f, 0.12f, 0.24f),
-                SocketPosition = new Vector3(-0.26f, 0.01f, 0f),
                 Shape = b =>
                 {
                     // Mount, arm and housing behind the glass
@@ -81,7 +79,6 @@ namespace StellarDriveDemoTF.Mirrors
                 GlassHeight = 0.032f,
                 BoundsCenter = new Vector3(0f, 0.02f, 0f),
                 BoundsSize = new Vector3(0.88f, 0.04f, 1.28f),
-                SocketPosition = new Vector3(-0.44f, 0.01f, 0f),
                 Shape = b =>
                 {
                     b[MirrorGroup.Frame].Box(new Vector3(0f, 0.012f, 0f), new Vector3(0.84f, 0.024f, 1.24f));

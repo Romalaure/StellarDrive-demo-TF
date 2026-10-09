@@ -20,9 +20,10 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
   ship. Palettes: forest, desert, arctic, urban, navy, night, autumn, and shades of the brush
   color; styles: spots, stripes, digital; adjustable patch size and "new pattern" button. Plain
   colors are what gets sent and saved, so it syncs like normal paint.
-- **Lamps** (needs SDModKit): ceiling light, wall light, spotlight and light strip in a new "TF"
-  build tab. Lit while no signal cable is plugged in; with one they follow the signal (0 = off,
-  1 = full). Painting a lamp sets its light color. They adapt to their surroundings: brighter at
+- **Lamps** (needs SDModKit), in a "TF" build tab: ceiling light, wall light, spotlight, light
+  strip, recessed spot, industrial lantern, light panel, pendant, LED strip (2 m), floor lamp,
+  blinking beacon (red) and rotating beacon (orange). They have no plug and are always on.
+  Painting a lamp sets its light color. They adapt to their surroundings: brighter at
   night and indoors, softer in open daylight.
 - **Corner lamps** (needs SDModKit): corner light, corner strip and corner spotlight, wedge
   shaped to sit in the angle between a ceiling (or floor) and a wall, lighting the room diagonally.

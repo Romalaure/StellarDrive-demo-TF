@@ -1,8 +1,4 @@
-using System;
-using Ships.Interface.Model.Parts;
-using Ships.Interface.Model.Parts.Common;
-using Ships.Interface.Model.Parts.State;
-using Ships.Interface.Model.Parts.StateTypes;
+using System.Globalization;
 using Ships.Parts.Common;
 using Ships.Parts.Common.Model;
 using Ships.Parts.Common.Utils;
@@ -13,16 +9,18 @@ using UnityEngine;
 namespace StellarDriveDemoTF.Lights
 {
     /// <summary>
-    /// Drives a lamp's light and glowing diffuser. Lamps are built on the Signal Display part, whose
-    /// server-side updater already reads the signal cable into SignalDisplayState.SignalValue and
-    /// syncs it. Without a cable the lamp stays on; with one it follows the signal (0 = off, 1 = full).
-    /// Painting the lamp sets the light color.
-    /// Everything is looked up from child objects, since this component is cloned by Instantiate.
+    /// Drives a lamp's light and glowing diffuser. Lamps have no plug and are always on. Painting
+    /// the lamp sets the light color; unpainted, it keeps the color its Light was built with.
+    /// Beacons blink and rotating beacons sweep their beam, both purely client-side.
+    /// Everything is looked up from child objects, since this component is cloned by Instantiate
+    /// (its own fields are not copied).
     /// </summary>
     internal sealed class LampVisuals : DefaultShipPartVisuals, IContextAwarePart
     {
         public const string LightName = "TF_LampLight";
         public const string DiffuserName = "TF_NoPaint_Diffuser";
+        /// <summary>Prefix of an empty child whose name carries the effects: "TF_LampFx blink=1 spin=240".</summary>
+        public const string EffectsName = "TF_LampFx";
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionColorId = Shader.PropertyToID("_EmissionColor");
@@ -35,16 +33,23 @@ namespace StellarDriveDemoTF.Lights
         private Renderer[] _diffusers;
         private float _baseIntensity;
         private float _baseRange;
+        private Color _defaultColor;
+        private Quaternion _baseRotation;
+        private float _blink;
+        private float _spin;
         private float _environment = 1f;
+        private float _targetEnvironment = 1f;
         private float _nextEnvironmentCheck;
         private MaterialPropertyBlock _block;
 
         private bool _hasContext;
         private PartKey _key;
-        private double _signal;
         private float _nextRefresh;
         private float _shownLevel = -1f;
         private Color _shownColor;
+
+        public static string EffectsObjectName(float blink, float spin) =>
+            string.Format(CultureInfo.InvariantCulture, "{0} blink={1} spin={2}", EffectsName, blink, spin);
 
         private void Awake()
         {
@@ -53,12 +58,34 @@ namespace StellarDriveDemoTF.Lights
             _light = lightObject != null ? lightObject.GetComponent<Light>() : null;
             _baseIntensity = _light != null ? _light.intensity : 0f;
             _baseRange = _light != null ? _light.range : 0f;
+            _defaultColor = _light != null ? _light.color : LampCatalog.DefaultLight;
+            _baseRotation = lightObject != null ? lightObject.localRotation : Quaternion.identity;
             Transform diffuser = transform.Find(DiffuserName);
             _diffusers = diffuser != null ? diffuser.GetComponents<Renderer>() : new Renderer[0];
+            ReadEffects();
             // Build menu previews have no context: show the lamp lit, without casting light
             if (_light != null)
                 _light.enabled = false;
-            Apply(1f, LampCatalog.DefaultLight, castLight: false);
+            Apply(1f, _defaultColor, castLight: false);
+        }
+
+        private void ReadEffects()
+        {
+            foreach (Transform child in transform)
+            {
+                if (!child.name.StartsWith(EffectsName))
+                    continue;
+                foreach (string part in child.name.Split(' '))
+                {
+                    string[] pair = part.Split('=');
+                    if (pair.Length != 2 || !float.TryParse(pair[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float value))
+                        continue;
+                    if (pair[0] == "blink")
+                        _blink = value;
+                    else if (pair[0] == "spin")
+                        _spin = value;
+                }
+            }
         }
 
         public void SetContext(ShipPartContext context)
@@ -68,29 +95,29 @@ namespace StellarDriveDemoTF.Lights
             _nextRefresh = 0f;
         }
 
-        public override void SetNetworkState(IStatefulPartState state) => ReadSignal(state);
-
-        public override void ReactToNetworkStateChange(StatefulPartStateChangeEvent change) => ReadSignal(change.NewState);
-
-        private void ReadSignal(IStatefulPartState state)
-        {
-            if (state is SignalDisplayState display)
-                _signal = display.SignalValue;
-            _nextRefresh = 0f;
-        }
-
         private void Update()
         {
-            if (!_hasContext || Time.unscaledTime < _nextRefresh)
+            if (!_hasContext)
+                return;
+
+            if (_spin != 0f && _light != null)
+            {
+                // Sweep around the lamp's axis (out of its mounting surface)
+                float angle = Time.time * _spin % 360f;
+                _light.transform.localRotation = Quaternion.AngleAxis(angle, Vector3.up) * _baseRotation;
+            }
+
+            bool animated = _blink > 0f;
+            if (!animated && Time.unscaledTime < _nextRefresh)
                 return;
             _nextRefresh = Time.unscaledTime + 0.2f;
 
+            // Beacons flash a short pulse once per period
             float level = 1f;
-            var cables = GameServices.CablesClient;
-            if (cables != null && cables.TryGetCableId(new EntityPartSocket(_key.ShipId, _key.PartId, 0), out _))
-                level = Mathf.Clamp01((float)Math.Abs(_signal));
+            if (_blink > 0f)
+                level = Time.time % _blink < _blink * 0.3f ? 1f : 0f;
 
-            Color color = PaintNet.Client.TryGet(_key, out PaintData paint) ? (Color)paint.Color : LampCatalog.DefaultLight;
+            Color color = PaintNet.Client.TryGet(_key, out PaintData paint) ? (Color)paint.Color : _defaultColor;
 
             bool environmentChanged = UpdateEnvironment();
             if (!environmentChanged && Mathf.Approximately(level, _shownLevel) && color == _shownColor)
@@ -109,7 +136,7 @@ namespace StellarDriveDemoTF.Lights
             }
             if (Time.unscaledTime >= _nextEnvironmentCheck)
             {
-                _nextEnvironmentCheck = Time.unscaledTime + 0.5f + UnityEngine.Random.value * 0.2f;
+                _nextEnvironmentCheck = Time.unscaledTime + 0.5f + Random.value * 0.2f;
                 _targetEnvironment = Mathf.Lerp(DarkBoost, DaylightDim, EnvironmentLight.Daylight(transform.position));
             }
             float next = Mathf.MoveTowards(_environment, _targetEnvironment, 0.25f);
@@ -118,8 +145,6 @@ namespace StellarDriveDemoTF.Lights
             _environment = next;
             return true;
         }
-
-        private float _targetEnvironment = 1f;
 
         private void Apply(float level, Color color, bool castLight)
         {

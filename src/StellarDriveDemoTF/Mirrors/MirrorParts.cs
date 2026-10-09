@@ -23,7 +23,7 @@ namespace StellarDriveDemoTF.Mirrors
         private static void Configure(MirrorSpec spec, PartSettings settings, GameObject prefab)
         {
             Transform visuals = LampParts.PrepareDonor(settings, prefab, spec.Label, spec.Description, spec.Mass, spec.Cost,
-                spec.BoundsCenter, spec.BoundsSize, spec.SocketPosition);
+                spec.BoundsCenter, spec.BoundsSize);
             int layer = visuals.gameObject.layer;
 
             Material frame = LitMaterials.Get("TF_MirrorFrame", new Color(0.16f, 0.17f, 0.19f), 0.5f, 0.5f);

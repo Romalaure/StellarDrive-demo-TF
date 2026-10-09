@@ -16,7 +16,7 @@ namespace StellarDriveDemoTF.Lights
 {
     /// <summary>
     /// Registers the lamps as new ship parts through SDModKit, which clones a donor part (here the
-    /// Signal Display, for its signal socket and synced signal value) under a new id and adds it to
+    /// Signal Display, a small synced part whose display and plug are removed) under a new id and adds it to
     /// the build menu. Only call this when SDModKit is loaded.
     /// </summary>
     internal static class LampParts
@@ -62,7 +62,7 @@ namespace StellarDriveDemoTF.Lights
         private static void Configure(LampSpec spec, PartSettings settings, GameObject prefab)
         {
             Transform visuals = PrepareDonor(settings, prefab, spec.Label, spec.Description, spec.Mass, spec.Cost,
-                spec.BoundsCenter, spec.BoundsSize, spec.SocketPosition);
+                spec.BoundsCenter, spec.BoundsSize);
             BuildModel(spec, visuals);
             visuals.gameObject.AddComponent<LampVisuals>();
         }
@@ -72,7 +72,7 @@ namespace StellarDriveDemoTF.Lights
         /// model removed. Returns the "Visuals" transform to build the new model under.
         /// </summary>
         internal static Transform PrepareDonor(PartSettings settings, GameObject prefab, string label, string description, float mass,
-            (uint Item, int Count)[] cost, Vector3 boundsCenter, Vector3 boundsSize, Vector3 socketPosition)
+            (uint Item, int Count)[] cost, Vector3 boundsCenter, Vector3 boundsSize)
         {
             settings.fullLabel = label;
             settings.description = description;
@@ -105,9 +105,17 @@ namespace StellarDriveDemoTF.Lights
                 }
             }
 
-            // SDModKit then seats the socket onto the bounds
+            // No plug: lamps are always on and mirrors need none. A part's sockets are read from
+            // the SocketObjects in its prefab, so removing them removes the plug
             foreach (SocketObject socket in prefab.GetComponentsInChildren<SocketObject>(true))
-                socket.transform.localPosition = socketPosition;
+            {
+                if (socket.visualObject != null)
+                    Object.DestroyImmediate(socket.visualObject);
+                if (socket != null && socket.interactive != null)
+                    Object.DestroyImmediate(socket.interactive);
+                if (socket != null)
+                    Object.DestroyImmediate(socket.gameObject);
+            }
             return visuals;
         }
 
@@ -137,13 +145,16 @@ namespace StellarDriveDemoTF.Lights
             light.type = spec.LightType;
             light.range = spec.Range;
             light.intensity = spec.Intensity;
-            light.color = LampCatalog.DefaultLight;
+            light.color = spec.Color ?? LampCatalog.DefaultLight;
             light.shadows = LightShadows.None;
             if (spec.LightType == LightType.Spot)
             {
                 light.spotAngle = spec.SpotAngle;
                 light.innerSpotAngle = spec.SpotAngle * 0.6f;
             }
+
+            if (spec.Blink > 0f || spec.Spin != 0f)
+                new GameObject(LampVisuals.EffectsObjectName(spec.Blink, spec.Spin)) { layer = layer }.transform.SetParent(visuals, false);
         }
 
         private static void EnsureMaterials()
