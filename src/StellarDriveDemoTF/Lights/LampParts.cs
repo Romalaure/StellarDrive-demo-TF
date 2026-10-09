@@ -130,8 +130,9 @@ namespace StellarDriveDemoTF.Lights
             var lightObject = new GameObject(LampVisuals.LightName) { layer = layer };
             lightObject.transform.SetParent(visuals, false);
             lightObject.transform.localPosition = spec.LightPosition;
-            // Lights shine along their forward axis; lamps shine out of their mounting surface (+y)
-            lightObject.transform.localRotation = Quaternion.LookRotation(Vector3.up, Vector3.forward);
+            // Lights shine along their forward axis: out of the mounting surface (+y), or diagonally for corner lamps
+            Vector3 direction = spec.LightDirection.normalized;
+            lightObject.transform.localRotation = Quaternion.LookRotation(direction, Mathf.Abs(direction.z) > 0.99f ? Vector3.up : Vector3.forward);
             var light = lightObject.AddComponent<Light>();
             light.type = spec.LightType;
             light.range = spec.Range;

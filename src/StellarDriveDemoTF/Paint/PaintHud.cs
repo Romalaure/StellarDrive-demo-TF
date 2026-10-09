@@ -49,7 +49,8 @@ namespace StellarDriveDemoTF.Paint
 
         private enum Drag { None, SaturationValue, Hue }
 
-        private static Texture2D _white, _hueBar, _svSquare;
+        private static Texture2D _white, _hueBar, _svSquare, _camoPreview;
+        private static string _camoPreviewKey;
         private static GUIStyle _panelStyle, _cardStyle, _chipStyle, _chipActiveStyle, _swatchFrame;
         private static GUIStyle _title, _section, _label, _muted, _big, _field, _toggle;
         private static Vector2 _presetScroll;
@@ -108,10 +109,16 @@ namespace StellarDriveDemoTF.Paint
             GUILayout.Space(4f);
             GUILayout.BeginHorizontal();
             Rect swatch = GUILayoutUtility.GetRect(58f, 58f, GUILayout.Width(58f), GUILayout.Height(58f));
-            DrawSwatch(swatch, selection.SelectedPaintColor, PaintBrush.Finish);
+            if (Camouflage.Enabled)
+                DrawCamoSwatch(swatch, selection.SelectedPaintColor);
+            else
+                DrawSwatch(swatch, selection.SelectedPaintColor, PaintBrush.Finish);
             GUILayout.Space(12f);
             GUILayout.BeginVertical();
-            GUILayout.Label("#" + ColorUtility.ToHtmlStringRGB(selection.SelectedPaintColor), _big);
+            if (Camouflage.Enabled)
+                GUILayout.Label("Camo " + Camouflage.Palette.Name, _big);
+            else
+                GUILayout.Label("#" + ColorUtility.ToHtmlStringRGB(selection.SelectedPaintColor), _big);
             GUILayout.Label(FinishText(PaintBrush.Finish), _muted);
             GUILayout.Label(selection.PaintBothSides ? "Murs : deux faces" : "Murs : face visée", _muted);
             GUILayout.EndVertical();
@@ -139,14 +146,138 @@ namespace StellarDriveDemoTF.Paint
             GUILayout.EndHorizontal();
             GUILayout.Space(8f);
 
-            DrawPicker(selection);
-            GUILayout.Space(10f);
-            DrawQuickColors(selection);
+            DrawMode();
+            GUILayout.Space(8f);
+            if (Camouflage.Enabled)
+            {
+                DrawCamouflage(selection);
+            }
+            else
+            {
+                DrawPicker(selection);
+                GUILayout.Space(10f);
+                DrawQuickColors(selection);
+            }
             DrawSides(selection);
             DrawFinish();
             DrawPresets(selection);
 
             GUILayout.EndArea();
+        }
+
+        private static void DrawMode()
+        {
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Couleur unie", Camouflage.Enabled ? _chipStyle : _chipActiveStyle, GUILayout.Height(30f)))
+                SetCamouflage(false);
+            GUILayout.Space(6f);
+            if (GUILayout.Button("Camouflage", Camouflage.Enabled ? _chipActiveStyle : _chipStyle, GUILayout.Height(30f)))
+                SetCamouflage(true);
+            GUILayout.EndHorizontal();
+        }
+
+        private static void DrawCamouflage(IPlayerPaintToolSelectionTracker selection)
+        {
+            // Pattern preview on a flat wall, one texel per wall segment
+            Rect preview = GUILayoutUtility.GetRect(100f, 96f, GUILayout.ExpandWidth(true), GUILayout.Height(96f));
+            UpdateCamoPreview(selection.SelectedPaintColor);
+            GUI.Box(preview, GUIContent.none, _swatchFrame);
+            GUI.DrawTexture(new Rect(preview.x + 2f, preview.y + 2f, preview.width - 4f, preview.height - 4f), _camoPreview, ScaleMode.StretchToFill);
+            GUILayout.Space(8f);
+
+            // Palettes, two per row
+            for (int i = 0; i < Camouflage.Palettes.Length; i += 2)
+            {
+                GUILayout.BeginHorizontal();
+                for (int j = i; j < Mathf.Min(i + 2, Camouflage.Palettes.Length); j++)
+                {
+                    PaletteChip(j, selection.SelectedPaintColor);
+                    if (j == i)
+                        GUILayout.Space(6f);
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.Space(5f);
+            }
+
+            GUILayout.BeginHorizontal();
+            for (int i = 0; i < Camouflage.StyleNames.Length; i++)
+            {
+                if (GUILayout.Button(Camouflage.StyleNames[i], (int)Camouflage.Style == i ? _chipActiveStyle : _chipStyle, GUILayout.Height(26f)))
+                {
+                    Camouflage.Style = (CamoStyle)i;
+                    _finishDirty = true;
+                }
+                GUILayout.Space(5f);
+            }
+            if (GUILayout.Button("Nouveau motif", _chipStyle, GUILayout.Height(26f)))
+            {
+                Camouflage.Seed++;
+                _finishDirty = true;
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(4f);
+
+            float t = (Camouflage.Scale - Camouflage.MinScale) / (Camouflage.MaxScale - Camouflage.MinScale);
+            float moved = Slider("Taches", t, true, Mathf.RoundToInt(Camouflage.Scale) + " m");
+            if (!Mathf.Approximately(moved, t))
+            {
+                Camouflage.Scale = Mathf.Lerp(Camouflage.MinScale, Camouflage.MaxScale, moved);
+                _finishDirty = true;
+            }
+
+            if (Camouflage.PaletteIndex == Camouflage.Palettes.Length - 1)
+            {
+                GUILayout.Label("Ton sur ton : nuances de la couleur de base choisie ici.", _muted);
+                DrawQuickColors(selection);
+            }
+            else
+            {
+                GUILayout.Label("Balaye murs, sols et pièces : chaque segment prend la couleur du motif à sa place.", _muted);
+            }
+        }
+
+        private static void PaletteChip(int index, Color brush)
+        {
+            CamoPalette palette = Camouflage.Palettes[index];
+            Rect chip = GUILayoutUtility.GetRect(196f, 34f, GUILayout.Width(196f), GUILayout.Height(34f));
+            bool active = Camouflage.PaletteIndex == index;
+            bool hover = chip.Contains(Event.current.mousePosition);
+            GUI.Box(chip, GUIContent.none, active ? _chipActiveStyle : hover ? _chipStyle : _cardStyle);
+            Color[] colors = palette.Colors(brush);
+            for (int i = 0; i < colors.Length; i++)
+                Fill(new Rect(chip.x + 7f + i * 13f, chip.y + 7f, 12f, 20f), colors[i]);
+            GUI.Label(new Rect(chip.x + 64f, chip.y + 7f, chip.width - 70f, 20f), palette.Name, _label);
+            if (GUI.Button(chip, GUIContent.none, GUIStyle.none))
+            {
+                Camouflage.PaletteIndex = index;
+                _finishDirty = true;
+            }
+        }
+
+        private static void DrawCamoSwatch(Rect rect, Color brush)
+        {
+            UpdateCamoPreview(brush);
+            GUI.Box(rect, GUIContent.none, _swatchFrame);
+            var inner = new Rect(rect.x + 2f, rect.y + 2f, rect.width - 4f, rect.height - 4f);
+            // A square from the left of the preview
+            GUI.DrawTextureWithTexCoords(inner, _camoPreview, new Rect(0f, 0f, (float)_camoPreview.height / _camoPreview.width, 1f));
+        }
+
+        private static void UpdateCamoPreview(Color brush)
+        {
+            string key = $"{Camouflage.PaletteIndex}/{Camouflage.Style}/{Camouflage.Scale:0.00}/{Camouflage.Seed}/{ColorUtility.ToHtmlStringRGB(brush)}";
+            if (_camoPreview != null && key == _camoPreviewKey)
+                return;
+            _camoPreviewKey = key;
+            if (_camoPreview == null)
+                _camoPreview = new Texture2D(48, 11, TextureFormat.RGBA32, false) { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
+            Camouflage.FillPreview(_camoPreview, brush, _camoPreview.width);
+        }
+
+        private static void SetCamouflage(bool enabled)
+        {
+            Camouflage.Enabled = enabled;
+            _finishDirty = true;
         }
 
         private static void DrawPicker(IPlayerPaintToolSelectionTracker selection)
@@ -367,7 +498,7 @@ namespace StellarDriveDemoTF.Paint
 
         // ---- Drawing helpers ----
 
-        private static float Slider(string label, float value, bool enabled)
+        private static float Slider(string label, float value, bool enabled, string valueText = null)
         {
             GUILayout.BeginHorizontal();
             GUILayout.Label(label, enabled ? _label : _muted, GUILayout.Width(86f));
@@ -381,7 +512,7 @@ namespace StellarDriveDemoTF.Paint
                 value = Mathf.Clamp01((e.mousePosition.x - track.x) / track.width);
                 e.Use();
             }
-            GUILayout.Label(Mathf.RoundToInt(value * 100f) + "%", _muted, GUILayout.Width(40f));
+            GUILayout.Label(valueText ?? Mathf.RoundToInt(value * 100f) + "%", _muted, GUILayout.Width(40f));
             GUILayout.EndHorizontal();
             return value;
         }
@@ -443,7 +574,7 @@ namespace StellarDriveDemoTF.Paint
         private static string TargetText()
         {
             if (PaintToolPatches.HoveringHull)
-                return "> Mur / sol — couleur";
+                return Camouflage.Enabled ? "> Mur / sol — camouflage" : "> Mur / sol — couleur";
             if (PaintToolPatches.HoveredPart.HasValue)
                 return "> Pièce — couleur + finition";
             return "> Aucune cible";

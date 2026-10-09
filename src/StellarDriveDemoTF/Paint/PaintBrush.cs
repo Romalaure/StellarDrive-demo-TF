@@ -34,6 +34,15 @@ namespace StellarDriveDemoTF.Paint
         };
     }
 
+    internal sealed class CamoSettings
+    {
+        public bool enabled;
+        public int palette;
+        public string style;
+        public float scale = 3f;
+        public int seed = 1;
+    }
+
     /// <summary>
     /// What the local player paints with, beyond the game's color selection: the finish, and the
     /// saved presets. Kept per player in UserData/TF/paint-presets.json.
@@ -46,6 +55,7 @@ namespace StellarDriveDemoTF.Paint
         {
             public int version = 1;
             public PaintPreset current;
+            public CamoSettings camo;
             public List<PaintPreset> presets = new List<PaintPreset>();
         }
 
@@ -65,6 +75,15 @@ namespace StellarDriveDemoTF.Paint
             }
         }
 
+        /// <summary>The paint a click applies at a point of the ship: the camouflage color there, or the plain color.</summary>
+        public static PaintData At(Vector3 shipPosition)
+        {
+            PaintData current = Current;
+            if (!Camouflage.Enabled)
+                return current;
+            return new PaintData(PaintNet.ToColor32(Camouflage.ColorAt(shipPosition, (Color)current.Color)), Finish);
+        }
+
         public static void EnsureLoaded()
         {
             if (_loaded)
@@ -80,6 +99,8 @@ namespace StellarDriveDemoTF.Paint
                         Presets.AddRange(file.presets);
                     if (file?.current != null)
                         Finish = file.current.Finish;
+                    if (file?.camo != null)
+                        LoadCamo(file.camo);
                     return;
                 }
             }
@@ -98,6 +119,14 @@ namespace StellarDriveDemoTF.Paint
                 var file = new BrushFile
                 {
                     current = PaintPreset.From("current", selection != null ? selection.SelectedPaintColor : Color.white, Finish),
+                    camo = new CamoSettings
+                    {
+                        enabled = Camouflage.Enabled,
+                        palette = Camouflage.PaletteIndex,
+                        style = Camouflage.Style.ToString(),
+                        scale = Camouflage.Scale,
+                        seed = Camouflage.Seed
+                    },
                     presets = Presets
                 };
                 string path = FilePath();
@@ -108,6 +137,16 @@ namespace StellarDriveDemoTF.Paint
             {
                 TFMod.Log.Error("could not save paint presets: " + e.Message);
             }
+        }
+
+        private static void LoadCamo(CamoSettings camo)
+        {
+            Camouflage.Enabled = camo.enabled;
+            Camouflage.PaletteIndex = Mathf.Clamp(camo.palette, 0, Camouflage.Palettes.Length - 1);
+            if (Enum.TryParse(camo.style, out CamoStyle style))
+                Camouflage.Style = style;
+            Camouflage.Scale = Mathf.Clamp(camo.scale, Camouflage.MinScale, Camouflage.MaxScale);
+            Camouflage.Seed = camo.seed;
         }
 
         public static void Apply(PaintPreset preset)

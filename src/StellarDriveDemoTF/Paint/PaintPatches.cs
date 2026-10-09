@@ -1,8 +1,13 @@
+using Core.Services;
 using Core.Utils;
+using Core.Values;
+using Managers.Interface.Model;
+using Managers.Interface.Services;
 using HarmonyLib;
 using Ships.Interface.Model;
 using Ships.Interface.Model.Parts;
 using Ships.Interface.Model.Parts.Common;
+using Ships.Interface.Model.Placement;
 using Ships.Interface.Services;
 using Ships.Parts.Common.Model.Reactions;
 using Ships.Visuals;
@@ -62,7 +67,17 @@ namespace StellarDriveDemoTF.Paint
                 var selection = GameServices.PaintSelection;
                 if (selection == null)
                     return;
-                PaintNet.RequestPaint(key, PaintBrush.Current, selection.ReplaceAllIdenticalColors);
+                if (Camouflage.Enabled)
+                {
+                    // The part's center in ship space picks its camouflage color
+                    RaycastHit center = hit;
+                    center.point = ((Component)part).transform.position;
+                    PaintNet.RequestPaint(key, PaintBrush.At(ship.ConvertHitToLocalHit(center).Pos), false);
+                }
+                else
+                {
+                    PaintNet.RequestPaint(key, PaintBrush.Current, selection.ReplaceAllIdenticalColors);
+                }
                 _lastPainted = key;
             }
         }
@@ -108,6 +123,48 @@ namespace StellarDriveDemoTF.Paint
         /// <summary>What the paint tool is aiming at, for the HUD.</summary>
         public static PartKey? HoveredPart => _hoveredPart;
         public static bool HoveringHull { get; private set; }
+    }
+
+    /// <summary>
+    /// Camouflage on walls and floors: the game paints a hull segment with the selected color; with
+    /// the camouflage brush on, the segment gets the pattern's color at its place instead. Same
+    /// network request as the game's, so it syncs and saves like normal paint.
+    /// </summary>
+    [HarmonyPatch(typeof(HullHover), nameof(HullHover.PaintObject))]
+    internal static class HullCamouflagePatch
+    {
+        private static readonly AccessTools.FieldRef<HullHover, HullPartPosition> Position =
+            AccessTools.FieldRefAccess<HullHover, HullPartPosition>("_hullPartPosition");
+        private static readonly AccessTools.FieldRef<HullHover, IShipPartTargeter> Ship =
+            AccessTools.FieldRefAccess<HullHover, IShipPartTargeter>("_currentShip");
+        private static readonly AccessTools.FieldRef<HullHover, bool> IsFront =
+            AccessTools.FieldRefAccess<HullHover, bool>("_isFront");
+
+        private static bool Prefix(HullHover __instance)
+        {
+            if (!Camouflage.Enabled)
+                return true;
+            var selection = GameServices.PaintSelection;
+            var network = ServiceLocator.GetService<IShipInteractionNetworkService>();
+            IShipPartTargeter ship = Ship(__instance);
+            if (selection == null || network == null || ship == null)
+                return true;
+
+            HullPartPosition position = Position(__instance);
+            Color color = Camouflage.ColorAt(position.VoxelCoord, selection.SelectedPaintColor);
+            var paint = new Vector3Byte((byte)(color.r * 255f), (byte)(color.g * 255f), (byte)(color.b * 255f));
+            HullPartColor current = ship.GetHullColor(position);
+            bool front = IsFront(__instance);
+            network.PaintHullPart(new PaintHullPartNetworkRequest
+            {
+                ShipId = ship.ShipId,
+                Position = position,
+                Color = new HullPartColor(
+                    front || selection.PaintBothSides ? paint : current.Front,
+                    !front || selection.PaintBothSides ? paint : current.Back)
+            });
+            return false;
+        }
     }
 
     /// <summary>Tracks whether the game's paint menu (right click) is open, so the HUD can show its full panel.</summary>

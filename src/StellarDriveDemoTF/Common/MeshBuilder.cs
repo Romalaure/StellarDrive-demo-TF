@@ -59,6 +59,21 @@ namespace StellarDriveDemoTF.Common
             Block(corners);
         }
 
+        /// <summary>Box along the given axes (orthonormal), without needing Unity's native quaternion code.</summary>
+        public void Box(Vector3 center, Vector3 size, Vector3 right, Vector3 up, Vector3 forward)
+        {
+            Vector3 h = size * 0.5f;
+            var corners = new Vector3[8];
+            for (int i = 0; i < 8; i++)
+            {
+                corners[i] = center
+                    + right * ((i & 1) == 0 ? -h.x : h.x)
+                    + up * ((i & 2) == 0 ? -h.y : h.y)
+                    + forward * ((i & 4) == 0 ? -h.z : h.z);
+            }
+            Block(corners);
+        }
+
         /// <summary>
         /// Any six-sided block. Corner index bits are (x, y, z): 0 = (-,-,-), 1 = (+,-,-), 2 = (-,+,-) ... 7 = (+,+,+).
         /// </summary>
@@ -81,6 +96,23 @@ namespace StellarDriveDemoTF.Common
                 Vector3 outward = faceCenter - centroid;
                 Quad(c[f[0]], c[f[1]], c[f[2]], c[f[3]], outward);
             }
+        }
+
+        /// <summary>
+        /// Corner wedge running along x: its base lies on y = y0 from z0 to z1 and its back rises
+        /// against z = z1 up to y1, leaving a sloped face toward -z/+y.
+        /// </summary>
+        public void Wedge(float x0, float x1, float y0, float y1, float z0, float z1)
+        {
+            var corners = new Vector3[8];
+            for (int i = 0; i < 8; i++)
+            {
+                bool top = (i & 2) != 0;
+                float x = (i & 1) == 0 ? x0 : x1;
+                float z = top || (i & 4) != 0 ? z1 : z0;
+                corners[i] = new Vector3(x, top ? y1 : y0, z);
+            }
+            Block(corners);
         }
 
         /// <summary>Cylinder or cone from a to b, radius ra at a and rb at b.</summary>
@@ -127,7 +159,8 @@ namespace StellarDriveDemoTF.Common
 
         private void Quad(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3, Vector3 outward)
         {
-            Vector3 n = Vector3.Cross(p1 - p0, p2 - p0);
+            // Diagonals give the normal even when two corners meet (wedges built with Block)
+            Vector3 n = Vector3.Cross(p2 - p0, p3 - p1);
             if (Vector3.Dot(n, outward) < 0f)
                 n = -n;
             n.Normalize();

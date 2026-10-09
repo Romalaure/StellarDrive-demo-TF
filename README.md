@@ -15,12 +15,22 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
   game's paint menu, with a saturation/value square and hue bar, quick colors, hex input, wall side
   mode (one face or both), finishes (gloss, metal, glow) for placed parts, and presets saved in
   `UserData/TF/paint-presets.json`.
+- **Camouflage brush**: in the paint panel, switch from "Couleur unie" to "Camouflage" and sweep
+  walls, floors and parts: each one gets a palette color from a 3D pattern at its place in the
+  ship. Palettes: forest, desert, arctic, urban, navy, night, autumn, and shades of the brush
+  color; styles: spots, stripes, digital; adjustable patch size and "new pattern" button. Plain
+  colors are what gets sent and saved, so it syncs like normal paint.
 - **Lamps** (needs SDModKit): ceiling light, wall light, spotlight and light strip in a new "TF"
   build tab. Lit while no signal cable is plugged in; with one they follow the signal (0 = off,
   1 = full). Painting a lamp sets its light color. They adapt to their surroundings: brighter at
   night and indoors, softer in open daylight.
+- **Corner lamps** (needs SDModKit): corner light, corner strip and corner spotlight, wedge
+  shaped to sit in the angle between a ceiling (or floor) and a wall, lighting the room diagonally.
+  Place them with their back against the wall.
 - **Mirrors** (needs SDModKit): rear-view mirror and wall mirror with real-time planar reflections.
-  Only mirrors near you and facing you render; resolution and distance are in the settings.
+  Only the nearest mirrors in view refresh (`MirrorMaxActive`, default 2), at a capped rate
+  (`MirrorFps`, 30), reflecting up to `MirrorFarClip` meters (80), with an image sized to how big
+  the mirror looks on screen (up to `MirrorResolution`).
 
 Settings live in `UserData/MelonPreferences.cfg` under `[TF]`.
 
@@ -55,7 +65,7 @@ Game and MelonLoader assemblies are referenced from the local install and are ne
 
 ## Release
 
-1. Bump `version` in `Mods/mod.json` and in `Core.cs`.
+1. Bump the version in `Mods/mod.json`, the csproj and `TFMod.cs`.
 2. Run `tools/package.ps1`, which produces `dist/StellarDrive-demo-TF.zip`.
 3. Create a GitHub release tagged `v<version>` and attach the zip.
 
