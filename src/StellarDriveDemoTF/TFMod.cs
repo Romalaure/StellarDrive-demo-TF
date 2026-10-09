@@ -26,39 +26,32 @@ namespace StellarDriveDemoTF
 
         public override void OnLateInitializeMelon()
         {
-            // Lamps, mirrors and infinite parts are new parts built with SDModKit; paint works without it
+            // Lamps, the camera, chairs and infinite parts are new parts built with SDModKit; paint works without it
             if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "SDModKit"))
                 RegisterParts();
             else
-                Log.Warning("SDModKit is not installed: lamps, mirrors and infinite parts are disabled");
+                Log.Warning("SDModKit is not installed: lamps, camera, chairs and infinite parts are disabled");
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void RegisterParts()
         {
+            Try("the TF build tab", Common.TFTab.Declare);
+            Try("lamps", Lights.LampParts.Register);
+            Try("the camera", Cameras.CameraParts.Register);
+            Try("chairs", Chairs.ChairParts.Register);
+            Try("infinite parts", Infinite.InfiniteParts.Register);
+        }
+
+        private static void Try(string what, Action register)
+        {
             try
             {
-                Lights.LampParts.Register();
+                register();
             }
             catch (Exception e)
             {
-                Log.Error("could not register lamps: " + e);
-            }
-            try
-            {
-                Infinite.InfiniteParts.Register();
-            }
-            catch (Exception e)
-            {
-                Log.Error("could not register infinite parts: " + e);
-            }
-            try
-            {
-                Chairs.ChairParts.Register();
-            }
-            catch (Exception e)
-            {
-                Log.Error("could not register chairs: " + e);
+                Log.Error("could not register " + what + ": " + e);
             }
         }
 
@@ -73,11 +66,18 @@ namespace StellarDriveDemoTF
             PaintToolGiver.Update();
             PaintHud.Update();
             GameDump.Update();
+            Cameras.CameraTablet.Update();
+        }
+
+        public override void OnLateUpdate()
+        {
+            Cameras.CameraTablet.LateUpdate();
         }
 
         public override void OnGUI()
         {
             PaintHud.Draw();
+            Cameras.CameraTablet.Draw();
         }
     }
 }

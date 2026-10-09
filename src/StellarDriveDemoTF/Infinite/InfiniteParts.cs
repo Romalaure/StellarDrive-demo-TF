@@ -11,6 +11,7 @@ using Ships.Interface.Model.Parts.State;
 using Ships.Interface.Model.Parts.StateTypes;
 using Ships.Interface.Settings;
 using Ships.Parts.WoodPowerGenerator;
+using StellarDriveDemoTF.Common;
 using StellarDriveDemoTF.Lights;
 using UnityEngine;
 
@@ -25,7 +26,6 @@ namespace StellarDriveDemoTF.Infinite
     /// </summary>
     internal static class InfiniteParts
     {
-        public const string BuildTab = "TF Infini";
 
         public const ushort Generator = 7121;
         public const ushort OxygenTank = 7122;
@@ -50,8 +50,6 @@ namespace StellarDriveDemoTF.Infinite
 
         public static void Register()
         {
-            BuildTabs.Declare(BuildTab, 51, InfiniteIcon.Create());
-
             Add(Generator, "WoodPowerGenerator", "Générateur infini",
                 $"Générateur électrique qui tourne sans bois, pour toujours : {4 * GeneratorMultiplier:0} kW en continu sur son réseau électrique.",
                 new[] { (Iron, 8), (Copper, 6), (Glass, 2) }, new Color(0.55f, 0.85f, 1f));
@@ -65,7 +63,7 @@ namespace StellarDriveDemoTF.Infinite
                 "Coffre qui se remplit tout seul : fer, verre, cuivre, aluminium, bois, glace, biocarburant, eau et éclats stellaires à volonté. La dernière case est une poubelle : ce que tu y poses disparaît.",
                 new[] { (Iron, 10), (Copper, 4), (Glass, 2) }, new Color(1f, 0.85f, 0.35f));
 
-            TFMod.Log.Msg($"registered {Ids.Count} infinite parts in the '{BuildTab}' build tab");
+            TFMod.Log.Msg($"registered {Ids.Count} infinite parts");
         }
 
         private static void Add(ushort id, string donor, string label, string description, (uint, int)[] cost, Color tint)
@@ -75,8 +73,8 @@ namespace StellarDriveDemoTF.Infinite
                 Id = id,
                 Name = "TF_" + id,
                 Donor = donor,
-                BuildTab = BuildTab,
-                BuildRow = 0,
+                BuildTab = TFTab.Name,
+                BuildRow = TFTab.InfiniteRow,
                 Configure = (settings, prefab) =>
                 {
                     settings.fullLabel = label;
@@ -208,39 +206,6 @@ namespace StellarDriveDemoTF.Infinite
         {
             if (!__result && part != null && InfiniteParts.IsInfinite(part.id))
                 __result = true;
-        }
-    }
-
-    /// <summary>Build tab icon: an infinity sign, drawn in code.</summary>
-    internal static class InfiniteIcon
-    {
-        public static Texture2D Create()
-        {
-            const int size = 64;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "TF_InfiniteIcon", hideFlags = HideFlags.HideAndDontSave };
-            var color = new Color(0.55f, 0.9f, 1f, 1f);
-            var pixels = new Color[size * size];
-            // Lemniscate of Bernoulli, drawn as a thick anti-aliased stroke
-            var curve = new List<Vector2>();
-            for (int i = 0; i < 400; i++)
-            {
-                float t = i / 400f * Mathf.PI * 2f;
-                float d = 1f + Mathf.Sin(t) * Mathf.Sin(t);
-                curve.Add(new Vector2(32f + 26f * Mathf.Cos(t) / d, 32f + 26f * Mathf.Sin(t) * Mathf.Cos(t) / d));
-            }
-            for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                var p = new Vector2(x + 0.5f, y + 0.5f);
-                float best = float.MaxValue;
-                foreach (Vector2 c in curve)
-                    best = Mathf.Min(best, (c - p).sqrMagnitude);
-                float alpha = Mathf.Clamp01(4.5f - Mathf.Sqrt(best));
-                pixels[y * size + x] = new Color(color.r, color.g, color.b, alpha);
-            }
-            texture.SetPixels(pixels);
-            texture.Apply();
-            return texture;
         }
     }
 }

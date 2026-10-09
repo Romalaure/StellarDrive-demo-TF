@@ -653,39 +653,10 @@ namespace StellarDriveDemoTF.Paint
             _toggle.normal.textColor = _toggle.onNormal.textColor = _toggle.hover.textColor = _toggle.onHover.textColor = TextColor;
         }
 
-        private static GUIStyle Rounded(Color color, int radius)
-        {
-            return new GUIStyle
-            {
-                normal = { background = RoundedTexture(color, radius) },
-                border = new RectOffset(radius + 1, radius + 1, radius + 1, radius + 1),
-                padding = new RectOffset(8, 8, 4, 4)
-            };
-        }
+        private static GUIStyle Rounded(Color color, int radius) => UiTextures.RoundedStyle(color, radius);
 
-        // Anti-aliased rounded rectangle, used 9-sliced so it scales to any size
-        private static Texture2D RoundedTexture(Color color, int radius)
-        {
-            int size = radius * 2 + 4;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave };
-            for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                float dx = Mathf.Max(0f, Mathf.Max(radius - (x + 0.5f), (x + 0.5f) - (size - radius)));
-                float dy = Mathf.Max(0f, Mathf.Max(radius - (y + 0.5f), (y + 0.5f) - (size - radius)));
-                float coverage = Mathf.Clamp01(radius + 0.5f - Mathf.Sqrt(dx * dx + dy * dy));
-                texture.SetPixel(x, y, new Color(color.r, color.g, color.b, color.a * coverage));
-            }
-            texture.Apply();
-            return texture;
-        }
+        private static Texture2D RoundedTexture(Color color, int radius) => UiTextures.Rounded(color, radius);
 
-        private static Texture2D Solid(Color color)
-        {
-            var texture = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
-            texture.SetPixel(0, 0, color);
-            texture.Apply();
-            return texture;
-        }
+        private static Texture2D Solid(Color color) => UiTextures.Solid(color);
     }
 }

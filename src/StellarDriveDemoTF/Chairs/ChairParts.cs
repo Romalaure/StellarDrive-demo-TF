@@ -26,12 +26,10 @@ namespace StellarDriveDemoTF.Chairs
     /// </summary>
     internal static class ChairParts
     {
-        public const string BuildTab = "TF Sièges";
         private const string Donor = "BasicPilotSeat";
 
         public static void Register()
         {
-            BuildTabs.Declare(BuildTab, 52, ChairIcon.Create());
             foreach (ChairSpec chair in ChairCatalog.All)
             {
                 ChairSpec spec = chair;
@@ -40,12 +38,12 @@ namespace StellarDriveDemoTF.Chairs
                     Id = spec.Id,
                     Name = "TF_" + spec.Id,
                     Donor = Donor,
-                    BuildTab = BuildTab,
-                    BuildRow = 0,
+                    BuildTab = TFTab.Name,
+                    BuildRow = TFTab.ChairsRow,
                     Configure = (settings, prefab) => Configure(spec, settings, prefab)
                 });
             }
-            TFMod.Log.Msg($"registered {ChairCatalog.All.Length} chairs in the '{BuildTab}' build tab");
+            TFMod.Log.Msg($"registered {ChairCatalog.All.Length} chairs");
         }
 
         private static void Configure(ChairSpec spec, PartSettings settings, GameObject prefab)
@@ -169,35 +167,6 @@ namespace StellarDriveDemoTF.Chairs
         {
             if (!__result && part != null && ChairCatalog.IsChair(part.id))
                 __result = true;
-        }
-    }
-
-    /// <summary>Build tab icon: a chair seen from the side, drawn in code.</summary>
-    internal static class ChairIcon
-    {
-        public static Texture2D Create()
-        {
-            const int size = 64;
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false) { name = "TF_ChairIcon", hideFlags = HideFlags.HideAndDontSave };
-            var color = new Color(0.95f, 0.75f, 0.45f, 1f);
-            var pixels = new Color[size * size];
-            // Rectangles in pixels (x0, y0, x1, y1), y up: back, seat, legs
-            int[][] parts =
-            {
-                new[] { 16, 30, 22, 58 },
-                new[] { 16, 30, 48, 36 },
-                new[] { 16, 6, 21, 30 },
-                new[] { 43, 6, 48, 30 }
-            };
-            for (int y = 0; y < size; y++)
-            for (int x = 0; x < size; x++)
-            {
-                bool filled = parts.Any(r => x >= r[0] && x < r[2] && y >= r[1] && y < r[3]);
-                pixels[y * size + x] = filled ? color : new Color(1f, 1f, 1f, 0f);
-            }
-            texture.SetPixels(pixels);
-            texture.Apply();
-            return texture;
         }
     }
 }

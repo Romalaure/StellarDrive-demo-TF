@@ -21,40 +21,30 @@ namespace StellarDriveDemoTF.Lights
     /// </summary>
     internal static class LampParts
     {
-        public const string BuildTab = "TF";
         private const string Donor = "SignalDisplay";
 
         private static readonly Dictionary<LampGroup, Material> Materials = new Dictionary<LampGroup, Material>();
 
         public static void Register()
         {
-            BuildTabs.Declare(BuildTab, 50, LampIcon.Create());
             foreach (LampSpec lamp in LampCatalog.All)
             {
                 LampSpec spec = lamp;
-                CustomParts.Register(new CustomPartDefinition
-                {
-                    Id = spec.Id,
-                    Name = "TF_" + spec.Id,
-                    Donor = Donor,
-                    BuildTab = BuildTab,
-                    BuildRow = 0,
-                    Configure = (settings, prefab) => Configure(spec, settings, prefab)
-                });
+                RegisterDonorPart(spec.Id, TFTab.LampsRow, (settings, prefab) => Configure(spec, settings, prefab));
             }
-            TFMod.Log.Msg($"registered {LampCatalog.All.Length} lamps in the '{BuildTab}' build tab");
-            Mirrors.MirrorParts.Register();
+            TFMod.Log.Msg($"registered {LampCatalog.All.Length} lamps");
         }
 
-        internal static void RegisterDonorPart(ushort id, string tab, System.Action<PartSettings, GameObject> configure)
+        /// <summary>A new part cloned from the Signal Display, in the TF build tab.</summary>
+        internal static void RegisterDonorPart(ushort id, int row, System.Action<PartSettings, GameObject> configure)
         {
             CustomParts.Register(new CustomPartDefinition
             {
                 Id = id,
                 Name = "TF_" + id,
                 Donor = Donor,
-                BuildTab = tab,
-                BuildRow = 0,
+                BuildTab = TFTab.Name,
+                BuildRow = row,
                 Configure = configure
             });
         }

@@ -20,40 +20,36 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
   ship. Palettes: forest, desert, arctic, urban, navy, night, autumn, and shades of the brush
   color; styles: spots, stripes, digital; adjustable patch size and "new pattern" button. Plain
   colors are what gets sent and saved, so it syncs like normal paint.
-- **Lamps** (needs SDModKit), in a "TF" build tab: ceiling light, wall light, spotlight, light
-  strip, recessed spot, industrial lantern, light panel, pendant, LED strip (2 m), floor lamp,
-  blinking beacon (red) and rotating beacon (orange). They have no plug and are always on.
-  Painting a lamp sets its light color. They adapt to their surroundings: brighter at
-  night and indoors, softer in open daylight.
-- **Corner lamps** (needs SDModKit): corner light, corner strip and corner spotlight, wedge
-  shaped to sit in the angle between a ceiling (or floor) and a wall, lighting the room diagonally.
-  Place them with their back against the wall.
-- **Infinite parts** (needs SDModKit), in a "TF Infini" build tab, cloned from the game's own
-  parts so power, fluid networks, chests, saving and sync work as usual:
-  - infinite generator: 20 kW forever, no wood;
-  - infinite oxygen tank and infinite ethanol tank: always full, they feed connected pipes
-    (thrusters, other tanks) without end;
-  - infinite resource chest: iron, glass, copper, aluminum, wood, ice, biofuel, water and stellar
-    shards that refill as you take them; the last slot is a bin.
-- **Chairs** (needs SDModKit), in a "TF Sièges" build tab: rustic chair, futuristic seat, copilot
-  seat, club armchair, bar stool, bench, office chair and shuttle passenger seat. They are built
-  on the game's pilot seat, so you sit in them the same way, but they have no effect on the ship:
-  next to no weight, no plug, flight controls ignored, never a gyroscope or the flight
-  orientation. `CopilotCanFly` (off by default) turns the copilot seat into a real second control
-  seat. Paint them to change their color.
-- **Mirrors** (needs SDModKit): rear-view mirror and wall mirror with real-time planar reflections.
-  Only the nearest mirror in view refreshes (`MirrorCount`, 1), `MirrorMovingFps` (20) times per
-  second while you move and `MirrorIdleFps` (2) while you stand still, reflecting the ship,
-  players and objects up to `MirrorViewDistance` meters (40) over a sky-colored background
-  (`MirrorReflectWorld` adds the planet and scenery), with an image sized to how big the mirror
-  looks on screen (up to `MirrorMaxResolution`, 320).
+- **TF build tab** (needs SDModKit): every new part is in one "TF" tab, one row per family.
+  - **Lamps**: ceiling light, wall light, spotlight, light strip, recessed spot, industrial
+    lantern, light panel, pendant, LED strip (2 m), floor lamp, blinking beacon (red), rotating
+    beacon (orange), and corner light, corner strip and corner spotlight, wedge shaped to sit in
+    the angle between a ceiling (or floor) and a wall. No plug, always on; painting a lamp sets its
+    light color. They adapt to their surroundings: brighter at night and indoors, softer in open
+    daylight.
+  - **Surveillance camera**: fix it on a wall, ceiling or hull; it looks away from its surface,
+    tilted 30 degrees (rotate it while placing to aim). Press **F9** for the camera tablet: it
+    shows the selected camera's live image (left/right arrows switch camera) and **P** takes out
+    the build tool with a camera selected to place a new one. Cameras only render while the tablet
+    is open (, 20; , 640).
+  - **Chairs**: rustic chair, futuristic seat, copilot seat, club armchair, bar stool, bench,
+    office chair and shuttle passenger seat. They are built on the game's pilot seat, so you sit in
+    them the same way, but they have no effect on the ship: next to no weight, no plug, flight
+    controls ignored, never a gyroscope or the flight orientation. `CopilotCanFly` (off by
+    default) turns the copilot seat into a real second control seat. Paint them to change their
+    color.
+  - **Infinite parts**, cloned from the game's own parts so power, fluid networks, chests, saving
+    and sync work as usual: infinite generator (20 kW forever, no wood); infinite oxygen and
+    ethanol tanks (always full, they feed connected pipes without end); infinite resource chest
+    (iron, glass, copper, aluminum, wood, ice, biofuel, water and stellar shards that refill as you
+    take them; the last slot is a bin).
 
 Settings live in `UserData/MelonPreferences.cfg` under `[TF]`.
 
 ## Install
 
 **With StellarModManager**: once the mod is listed in the online repository, install it from the
-"Online" tab, then press "Install to game". Also install **SDModKit** (needed for lamps and mirrors).
+"Online" tab, then press "Install to game". Also install **SDModKit** (needed for the TF build tab parts).
 
 **By hand**: download `StellarDrive-demo-TF.zip` from the
 [latest release](https://github.com/Romalaure/StellarDrive-demo-TF/releases/latest) and copy
