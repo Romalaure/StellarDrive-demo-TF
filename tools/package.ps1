@@ -16,6 +16,16 @@ Copy-Item (Join-Path $root 'src\StellarDriveDemoTF\bin\Release\StellarDriveDemoT
 
 $version = (Get-Content (Join-Path $root 'Mods\mod.json') -Raw | ConvertFrom-Json).version
 $zip = Join-Path $dist 'StellarDrive-demo-TF.zip'
-Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
+# Entry names with '/' (Compress-Archive on Windows PowerShell writes '\', which some unzippers misread)
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::Open($zip, 'Create')
+try {
+    foreach ($file in Get-ChildItem $stage -Recurse -File) {
+        $entry = $file.FullName.Substring($stage.Length + 1).Replace('\', '/')
+        [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $file.FullName, $entry) | Out-Null
+    }
+} finally {
+    $archive.Dispose()
+}
 Remove-Item $stage -Recurse -Force
 Write-Host "Packaged $zip (upload it to a GitHub release tagged v$version)"
