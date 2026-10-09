@@ -51,9 +51,13 @@ namespace StellarDriveDemoTF.Chairs
         private static void Configure(ChairSpec spec, PartSettings settings, GameObject prefab)
         {
             settings.fullLabel = spec.Label;
-            settings.description = spec.Description;
+            bool sitOnly = ChairCatalog.IsSitOnly(spec.Id);
+            settings.description = sitOnly && spec.CanPilot
+                ? spec.Description.Split(new[] { " C'est un vrai poste" }, System.StringSplitOptions.None)[0] + " Décoratif : il ne pilote pas (réglage CopilotCanFly pour l'activer)."
+                : spec.Description;
             settings.localizedDescription = null;
-            settings.mass = spec.Mass;
+            // Chairs are furniture: next to no weight, so they never change how the ship handles
+            settings.mass = sitOnly ? 0.01f : spec.Mass;
             LampParts.SetCost(settings, spec.Cost);
 
             var bounds = prefab.GetComponent<ShipPartBounds>();
@@ -74,7 +78,7 @@ namespace StellarDriveDemoTF.Chairs
                 }
             }
 
-            if (!spec.CanPilot)
+            if (sitOnly)
             {
                 foreach (SocketObject socket in prefab.GetComponentsInChildren<SocketObject>(true))
                 {

@@ -329,12 +329,16 @@ namespace StellarDriveDemoTF.Chairs
         };
 
         private static readonly HashSet<ushort> Ids = new HashSet<ushort>(All.Select(c => c.Id));
-        private static readonly HashSet<ushort> SitOnlyIds = new HashSet<ushort>(All.Where(c => !c.CanPilot).Select(c => c.Id));
+        private static readonly HashSet<ushort> PilotIds = new HashSet<ushort>(All.Where(c => c.CanPilot).Select(c => c.Id));
 
         public static bool IsChair(ushort partId) => Ids.Contains(partId);
 
-        /// <summary>Chairs you can only sit on: they must not steer the ship.</summary>
-        public static bool IsSitOnly(ushort partId) => SitOnlyIds.Contains(partId);
+        /// <summary>
+        /// Chairs you can only sit on: they must not affect the ship in any way. Every chair is,
+        /// except the copilot seat when the CopilotCanFly setting allows it to fly.
+        /// </summary>
+        public static bool IsSitOnly(ushort partId) =>
+            Ids.Contains(partId) && !(PilotIds.Contains(partId) && Settings.CopilotCanFly.Value);
 
         /// <summary>Back tilted by the given angle: its up axis leans toward -z.</summary>
         private static (Vector3 Up, Vector3 Forward) Tilt(float degrees)

@@ -45,7 +45,24 @@ namespace StellarDriveDemoTF.Mirrors
         private bool _hooked;
         private bool _selected;
         private float _distance;
-        private float _nextRender;
+        private float _lastRender = float.NegativeInfinity;
+        private Vector3 _lastEye = new Vector3(float.MaxValue, 0f, 0f);
+
+        // What a planar mirror shows depends only on where the eye is relative to the glass, not
+        // where it looks: re-render quickly while that changes, and only now and then otherwise
+        // (for things moving in the reflection)
+        private bool NeedsRender(Camera viewer)
+        {
+            if (_texture == null)
+                return true;
+            float since = Time.unscaledTime - _lastRender;
+            bool moved = (EyeInGlass(viewer) - _lastEye).sqrMagnitude > 0.02f * 0.02f;
+            if (moved)
+                return since >= 1f / Mathf.Clamp(Settings.MirrorFps.Value, 1, 120);
+            return since >= 1f / Mathf.Clamp(Settings.MirrorIdleFps.Value, 0.05f, 120f);
+        }
+
+        private Vector3 EyeInGlass(Camera viewer) => _glass.transform.InverseTransformPoint(viewer.transform.position);
 
         private void Awake()
         {
@@ -59,8 +76,6 @@ namespace StellarDriveDemoTF.Mirrors
             float width = _corners.Max(c => c.x) - _corners.Min(c => c.x);
             float height = _corners.Max(c => c.z) - _corners.Min(c => c.z);
             _aspect = height / Mathf.Max(width, 0.01f);
-            // Spread refreshes of several mirrors over different frames
-            _nextRender = Random.value * 0.05f;
         }
 
         public void SetContext(ShipPartContext context)
@@ -114,13 +129,14 @@ namespace StellarDriveDemoTF.Mirrors
             if (viewer != null)
             {
                 Rank(viewer);
-                if (_selected && Time.unscaledTime >= _nextRender)
+                if (_selected && NeedsRender(viewer))
                 {
                     EnsureCamera(viewer);
                     EnsureTexture(viewer);
                     Place(viewer);
                     render = true;
-                    _nextRender = Time.unscaledTime + 0.9f / Mathf.Clamp(Settings.MirrorFps.Value, 1, 240);
+                    _lastRender = Time.unscaledTime;
+                    _lastEye = EyeInGlass(viewer);
                 }
             }
             // A camera enabled during LateUpdate renders this frame; disabled ones keep their last image
@@ -291,7 +307,7 @@ namespace StellarDriveDemoTF.Mirrors
         {
             if (_camera != null)
             {
-                _camera.cullingMask = viewer.cullingMask;
+                ApplyWorldSettings(viewer);
                 return;
             }
 
@@ -322,6 +338,49 @@ namespace StellarDriveDemoTF.Mirrors
                 data.requiresDepthOption = CameraOverrideOption.Off;
                 data.requiresColorOption = CameraOverrideOption.Off;
             }
+            ApplyWorldSettings(viewer);
+        }
+
+        // Layers never worth reflecting, and the costly scenery ones skipped unless MirrorReflectWorld
+        private static readonly string[] AlwaysHidden = { "UI", "WorldUI", "BuildToolRender", "PartThumbnailRender", "Id" };
+        private static readonly string[] Scenery = { "Planet", "Water", "DistantObject" };
+        private static int _hiddenBits = -1, _sceneryBits;
+
+        private void ApplyWorldSettings(Camera viewer)
+        {
+            bool world = Settings.MirrorReflectWorld.Value;
+            if (_hiddenBits < 0)
+            {
+                _hiddenBits = LayerBits(AlwaysHidden);
+                _sceneryBits = LayerBits(Scenery);
+            }
+            int mask = viewer.cullingMask & ~_hiddenBits;
+            if (!world)
+                mask &= ~_sceneryBits;
+            _camera.cullingMask = mask;
+            if (world)
+            {
+                _camera.clearFlags = viewer.clearFlags;
+            }
+            else
+            {
+                // A plain sky-colored background instead of the sky and planet
+                _camera.clearFlags = CameraClearFlags.SolidColor;
+                Color sky = RenderSettings.fog ? RenderSettings.fogColor : RenderSettings.ambientSkyColor;
+                _camera.backgroundColor = new Color(sky.r, sky.g, sky.b, 1f);
+            }
+        }
+
+        private static int LayerBits(string[] names)
+        {
+            int bits = 0;
+            foreach (string name in names)
+            {
+                int layer = LayerMask.NameToLayer(name);
+                if (layer >= 0)
+                    bits |= 1 << layer;
+            }
+            return bits;
         }
     }
 

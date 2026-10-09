@@ -37,13 +37,16 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
     shards that refill as you take them; the last slot is a bin.
 - **Chairs** (needs SDModKit), in a "TF Sièges" build tab: rustic chair, futuristic seat, copilot
   seat, club armchair, bar stool, bench, office chair and shuttle passenger seat. They are built
-  on the game's pilot seat, so you sit in them the same way. Only the copilot seat flies the ship;
-  the others ignore flight controls and never act as a gyroscope or set the flight orientation.
-  Paint them to change their color.
+  on the game's pilot seat, so you sit in them the same way, but they have no effect on the ship:
+  next to no weight, no plug, flight controls ignored, never a gyroscope or the flight
+  orientation. `CopilotCanFly` (off by default) turns the copilot seat into a real second control
+  seat. Paint them to change their color.
 - **Mirrors** (needs SDModKit): rear-view mirror and wall mirror with real-time planar reflections.
-  Only the nearest mirrors in view refresh (`MirrorMaxActive`, default 2), at a capped rate
-  (`MirrorFps`, 30), reflecting up to `MirrorFarClip` meters (80), with an image sized to how big
-  the mirror looks on screen (up to `MirrorResolution`).
+  Only the nearest mirror in view refreshes (`MirrorCount`, 1), `MirrorMovingFps` (20) times per
+  second while you move and `MirrorIdleFps` (2) while you stand still, reflecting the ship,
+  players and objects up to `MirrorViewDistance` meters (40) over a sky-colored background
+  (`MirrorReflectWorld` adds the planet and scenery), with an image sized to how big the mirror
+  looks on screen (up to `MirrorMaxResolution`, 320).
 
 Settings live in `UserData/MelonPreferences.cfg` under `[TF]`.
 
