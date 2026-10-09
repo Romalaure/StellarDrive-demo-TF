@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>StellarDriveDemoTF</AssemblyName>
+    <RootNamespace>StellarDriveDemoTF</RootNamespace>
+    <Version>0.1.0</Version>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- Copy the built DLL into the game's Mods folder after each build -->
+    <DeployToGame Condition="'$(DeployToGame)' == ''">true</DeployToGame>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Game and loader assemblies, referenced from the local install, never copied -->
+  <ItemGroup>
+    <Reference Include="MelonLoader" HintPath="$(MelonLoaderPath)\MelonLoader.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(MelonLoaderPath)\0Harmony.dll" Private="false" />
+    <Reference Include="Assembly-CSharp" HintPath="$(ManagedPath)\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(ManagedPath)\UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(ManagedPath)\UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.PhysicsModule" HintPath="$(ManagedPath)\UnityEngine.PhysicsModule.dll" Private="false" />
+    <Reference Include="Unity.InputSystem" HintPath="$(ManagedPath)\Unity.InputSystem.dll" Private="false" />
+    <Reference Include="FishNet.Runtime" HintPath="$(ManagedPath)\FishNet.Runtime.dll" Private="false" />
+    <Reference Include="Planets" HintPath="$(ManagedPath)\Planets.dll" Private="false" />
+    <Reference Include="Planets.Interface" HintPath="$(ManagedPath)\Planets.Interface.dll" Private="false" />
+    <Reference Include="Players" HintPath="$(ManagedPath)\Players.dll" Private="false" />
+    <Reference Include="Players.Interface" HintPath="$(ManagedPath)\Players.Interface.dll" Private="false" />
+    <Reference Include="Ships" HintPath="$(ManagedPath)\Ships.dll" Private="false" />
+    <Reference Include="Ships.Interface" HintPath="$(ManagedPath)\Ships.Interface.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="DeployToGameMods" AfterTargets="Build" Condition="'$(DeployToGame)' == 'true' And Exists('$(GamePath)\Mods')">
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GamePath)\Mods" />
+    <Message Importance="high" Text="Deployed $(TargetFileName) -> $(GamePath)\Mods" />
+  </Target>
+
+</Project>
