@@ -12,7 +12,6 @@ using Ships.Interface.Model.Placement;
 using Ships.Interface.Model.State;
 using Ships.Interface.Settings;
 using Ships.Joints;
-using Ships.Physics.Model;
 using StellarDriveDemoTF.Common;
 using UnityEngine;
 
@@ -138,45 +137,31 @@ namespace StellarDriveDemoTF.Devices
         }
     }
 
-    /// <summary>A horizontal docking door's magnet points up or down, like its model.</summary>
-    [HarmonyPatch]
-    internal static class HorizontalDockMagnetPatch
+    /// <summary>
+    /// A horizontal docking door's magnet (attraction points, alignment) points up or down like
+    /// its model. The game's magnet data reads the part's rotation and position from these two
+    /// properties, so they are turned for the horizontal docking doors only. (Patching the
+    /// magnet struct itself crashed the game: Mono and Harmony disagree on struct methods that
+    /// return structs.)
+    /// </summary>
+    [HarmonyPatch(typeof(StatefulPart))]
+    internal static class HorizontalDockFramePatch
     {
-        private static readonly System.Reflection.FieldInfo RotationField = AccessTools.Field(typeof(ShipMagnetData), "_rotation");
-        private static readonly System.Reflection.FieldInfo PositionField = AccessTools.Field(typeof(ShipMagnetData), "_position");
-
-        [HarmonyPatch(typeof(ShipMagnetData), "ToWorldPos")]
-        [HarmonyPrefix]
-        private static bool ToWorldPos(ref ShipMagnetData __instance, Vector3 localPos, ref Vector3 __result)
+        [HarmonyPatch(nameof(StatefulPart.LocalRotation), MethodType.Getter)]
+        [HarmonyPostfix]
+        private static void Rotation(StatefulPart __instance, ref Quaternion __result)
         {
-            if (!HullDoors.TryTilt(__instance.Part, out Quaternion tilt, out Vector3 offset))
-                return true;
-            object boxed = __instance;
-            var shipRotation = (Quaternion)RotationField.GetValue(boxed);
-            var shipPosition = (Vector3)PositionField.GetValue(boxed);
-            StatefulPart part = __instance.Part;
-            __result = shipPosition + shipRotation * (part.LocalPosition + part.LocalRotation * (offset + tilt * localPos));
-            return false;
+            if (__instance.Settings != null && HullDoors.IsDock(__instance.Settings.id) && HullDoors.TryTilt(__instance, out Quaternion tilt, out _))
+                __result *= tilt;
         }
 
-        [HarmonyPatch(typeof(ShipMagnetData), nameof(ShipMagnetData.WorldUp), MethodType.Getter)]
+        [HarmonyPatch(nameof(StatefulPart.LocalPosition), MethodType.Getter)]
         [HarmonyPostfix]
-        private static void WorldUp(ref ShipMagnetData __instance, ref Vector3 __result) => Turn(__instance, Vector3.up, ref __result);
-
-        [HarmonyPatch(typeof(ShipMagnetData), nameof(ShipMagnetData.WorldRight), MethodType.Getter)]
-        [HarmonyPostfix]
-        private static void WorldRight(ref ShipMagnetData __instance, ref Vector3 __result) => Turn(__instance, Vector3.right, ref __result);
-
-        [HarmonyPatch(typeof(ShipMagnetData), nameof(ShipMagnetData.WorldLeft), MethodType.Getter)]
-        [HarmonyPostfix]
-        private static void WorldLeft(ref ShipMagnetData __instance, ref Vector3 __result) => Turn(__instance, Vector3.left, ref __result);
-
-        private static void Turn(ShipMagnetData magnet, Vector3 axis, ref Vector3 result)
+        private static void Position(StatefulPart __instance, ref Vector3 __result)
         {
-            if (!HullDoors.TryTilt(magnet.Part, out Quaternion tilt, out _))
-                return;
-            var shipRotation = (Quaternion)RotationField.GetValue(magnet);
-            result = shipRotation * magnet.Part.LocalRotation * (tilt * axis);
+            if (__instance.Settings != null && HullDoors.IsDock(__instance.Settings.id) && HullDoors.TryTilt(__instance, out _, out Vector3 offset)
+                && offset != Vector3.zero)
+                __result += __instance.Placement.Rotation * offset;
         }
     }
 
