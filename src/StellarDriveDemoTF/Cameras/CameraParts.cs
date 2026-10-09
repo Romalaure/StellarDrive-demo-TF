@@ -31,7 +31,7 @@ namespace StellarDriveDemoTF.Cameras
 
         public static void Register()
         {
-            LampParts.RegisterDonorPart(CameraId, TFTab.CamerasRow, Configure);
+            LampParts.RegisterDonorPart(CameraId, TFTab.CamerasRow, Configure, TFTab.ObjectsName);
             Registered = true;
             TFMod.Log.Msg("registered the surveillance camera");
         }

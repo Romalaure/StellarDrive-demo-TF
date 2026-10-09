@@ -6,7 +6,6 @@ namespace StellarDriveDemoTF.Common
     {
         private static MelonPreferences_Category _category;
 
-        public static MelonPreferences_Entry<string> GivePaintToolKey { get; private set; }
         public static MelonPreferences_Entry<bool> PaintAllParts { get; private set; }
         public static MelonPreferences_Entry<bool> DumpOnWorldLoad { get; private set; }
         public static MelonPreferences_Entry<bool> AdaptiveLamps { get; private set; }
@@ -23,13 +22,10 @@ namespace StellarDriveDemoTF.Common
         public static MelonPreferences_Entry<float> RadioVolume { get; private set; }
         public static MelonPreferences_Entry<string> OutfitPrimary { get; private set; }
         public static MelonPreferences_Entry<string> OutfitSecondary { get; private set; }
-        public static MelonPreferences_Entry<string> SchematicsKey { get; private set; }
 
         public static void Load()
         {
             _category = MelonPreferences.CreateCategory("TF", "StellarDrive Demo TF");
-            GivePaintToolKey = _category.CreateEntry("GivePaintToolKey", "F8",
-                description: "Key (UnityEngine.InputSystem.Key name) that puts the paint tool in your inventory if you do not have one. Empty disables it.");
             PaintAllParts = _category.CreateEntry("PaintAllParts", true,
                 description: "Let the paint tool color doors, machines and every other placed part, not only walls and floors.");
             DumpOnWorldLoad = _category.CreateEntry("DumpOnWorldLoad", true,
@@ -60,8 +56,6 @@ namespace StellarDriveDemoTF.Common
                 description: "Volume of TF radios, from 0 to 1.");
             OutfitPrimary = _category.CreateEntry("OutfitPrimary", "",
                 description: "Your suit's main color (hex, like 3A7BD5), set in the TF wardrobe. Empty keeps the game's color.");
-            SchematicsKey = _category.CreateEntry("SchematicsKey", "F10",
-                description: "Key (UnityEngine.InputSystem.Key name) that opens the ship schematics window (host only).");
             OutfitSecondary = _category.CreateEntry("OutfitSecondary", "",
                 description: "Your helmet and backpack color (hex), set in the TF wardrobe. Empty keeps the game's color.");
         }

@@ -27,6 +27,7 @@ namespace StellarDriveDemoTF
             Devices.TeleportCapsule.Install();
             Devices.Radio.Install();
             Devices.Outfits.Install();
+            Devices.ToolRack.Install();
             Log.Msg("ready");
         }
 
@@ -79,6 +80,7 @@ namespace StellarDriveDemoTF
             Try("the teleport capsule", Devices.TeleportCapsule.Register);
             Try("the radio", Devices.Radio.Register);
             Try("the wardrobe", Devices.Wardrobe.Register);
+            Try("the tool rack", Devices.ToolRack.Register);
             Try("trapdoors and horizontal docking doors", Devices.HullDoors.Register);
         }
 
@@ -103,7 +105,6 @@ namespace StellarDriveDemoTF
         public override void OnUpdate()
         {
             PaintNet.Update();
-            PaintToolGiver.Update();
             PaintHud.Update();
             GameDump.Update();
             Cameras.CameraTablet.Update();
@@ -112,7 +113,7 @@ namespace StellarDriveDemoTF
             Devices.Outfits.Update();
             Devices.RadioSound.Update();
             Devices.ThirdPerson.Update();
-            Devices.Schematics.Update();
+            Devices.SchematicTablet.Update();
         }
 
         public override void OnLateUpdate()
@@ -129,6 +130,8 @@ namespace StellarDriveDemoTF
             Devices.RadioMenu.Draw();
             Devices.WardrobeMenu.Draw();
             Devices.SchematicsMenu.Draw();
+            Devices.ToolRackMenu.Draw();
+            Devices.SchematicTablet.Draw();
         }
     }
 }

@@ -24,7 +24,7 @@ namespace StellarDriveDemoTF.Devices
 
         public static void Register()
         {
-            Lights.LampParts.RegisterDonorPart(WardrobeId, TFTab.DevicesRow, Configure);
+            Lights.LampParts.RegisterDonorPart(WardrobeId, TFTab.DevicesRow, Configure, TFTab.ObjectsName);
             TFMod.Log.Msg("registered the wardrobe");
         }
 

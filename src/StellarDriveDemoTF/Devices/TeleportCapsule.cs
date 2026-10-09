@@ -37,7 +37,7 @@ namespace StellarDriveDemoTF.Devices
 
         public static void Register()
         {
-            Lights.LampParts.RegisterDonorPart(CapsuleId, TFTab.DevicesRow, Configure);
+            Lights.LampParts.RegisterDonorPart(CapsuleId, TFTab.DevicesRow, Configure, TFTab.ObjectsName);
             TFMod.Log.Msg("registered the teleport capsule");
         }
 

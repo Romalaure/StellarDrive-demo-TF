@@ -21,6 +21,8 @@ namespace StellarDriveDemoTF.Common
         TeleportRefused = 3,
         /// <summary>Client to server, then server to everyone: capsule A/B is now called Text.</summary>
         CapsuleName = 4,
+        /// <summary>Client to server: give me the tool item A (paint gun or schematic tablet).</summary>
+        GiveTool = 5,
 
         /// <summary>Client to server, then server to everyone: radio A/B now plays Text.</summary>
         Radio = 10,

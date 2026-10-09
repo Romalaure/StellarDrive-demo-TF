@@ -4,8 +4,8 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
 
 ## Features
 
-- **Paint tool**: the demo contains the game's paint tool but never hands it out. Press **F8** in a
-  world to get one. It paints walls and floors (game feature) and, with this mod, doors, machines
+- **Paint tool**: the demo contains the game's paint tool but never hands it out. Take one from
+  the TF **tool rack** (see below). It paints walls and floors (game feature) and, with this mod, doors, machines
   and every other placed part. Part colors are saved in `tf-paint.json` next to the world save
   (save from the pause menu: quitting does not save) and synced to every player who has the mod.
 - **Spray gun model**: replaces the placeholder paint tool model with a spray gun whose cup and
@@ -20,7 +20,9 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
   ship. Palettes: forest, desert, arctic, urban, navy, night, autumn, and shades of the brush
   color; styles: spots, stripes, digital; adjustable patch size and "new pattern" button. Plain
   colors are what gets sent and saved, so it syncs like normal paint.
-- **TF build tab** (needs SDModKit): every new part is in one "TF" tab, one row per family.
+- **TF build tabs** (needs SDModKit): the build menu does not scroll, so the parts are split over
+  two tabs of three rows: "TF" (lamps, chairs) and "TF Objets" (camera and devices, infinite parts,
+  floor doors).
   - **Lamps**: ceiling light, wall light, spotlight, light strip, recessed spot, industrial
     lantern, light panel, pendant, LED strip (2 m), floor lamp, blinking beacon (red), rotating
     beacon (orange), and corner light, corner strip and corner spotlight, wedge shaped to sit in
@@ -63,11 +65,13 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
     - **Wardrobe**: choose your suit's main color and your helmet and backpack color
       (`OutfitPrimary`, `OutfitSecondary`); every player with the mod sees them.
   - **Trapdoors** (2x2 and 1x1) and **horizontal docking doors** (docking downward or upward):
-    the game's door and docking door, cloned, snapping like floor tiles, with model, colliders and
-    interaction turned 90 degrees. Remove the floor tiles and place them in the gap. For the
-    docking doors the magnet and the docking joint are turned too, so ships dock one above the
-    other.
-- **Ship schematics** (host only, **F10**, `SchematicsKey`): copy the nearest ship, with the
+    the game's door and docking door, cloned and snapping like floor tiles. Remove the floor tiles
+    and place them in the gap. The game already lays floor parts flat; each door's frame (read by
+    the game for its model, colliders, interaction, preview, magnet and docking joint) is recentred
+    on its tiles, and docking doors always face down or up, so ships dock one above the other.
+- **Tool rack** (TF Objets): use it to take a paint gun or a **schematic tablet**, a new
+  inventory item; held in the hand, a left click opens the schematics window.
+- **Ship schematics** (host only, from the schematic tablet): copy the nearest ship, with the
   ships docked to it, its cables, TF paint and capsule names, to `UserData/TF/schematics`, then
   build it again in front of you, in this world or another. Uses the game's own developer ship
   export/import; building is free.

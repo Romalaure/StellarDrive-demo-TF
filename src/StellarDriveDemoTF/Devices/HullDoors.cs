@@ -10,9 +10,13 @@ using Ships.Interface.Model.Parts;
 using Ships.Interface.Model.Parts.State;
 using Ships.Interface.Model.Placement;
 using Ships.Interface.Model.State;
+using Ships.Interface.Services;
 using Ships.Interface.Settings;
 using Ships.Joints;
+using Ships.Parts.Common.Model.Reactions;
+using Ships.Physics.Collision;
 using StellarDriveDemoTF.Common;
+using Tools.Build;
 using UnityEngine;
 
 namespace StellarDriveDemoTF.Devices
@@ -20,10 +24,15 @@ namespace StellarDriveDemoTF.Devices
     /// <summary>
     /// Doors laid in the floor: trapdoors (the game's door, 2x2 or shrunk to 1x1) and horizontal
     /// docking doors (the game's docking door, docking downward or upward). They are the game's
-    /// own parts, cloned, set to snap like floor tiles, with their model, colliders and
-    /// interaction box turned 90 degrees under the part: opening, closing, saving and syncing
-    /// all stay the game's. For the docking doors, the magnet and the docking joint are turned
-    /// the same way, so two ships dock one above the other.
+    /// own parts, cloned and set to snap like floor tiles, so opening, closing, saving and syncing
+    /// stay the game's.
+    ///
+    /// The game already lays floor parts flat (their forward axis is vertical), but a door's model
+    /// grows from its corner (+x, +y) while a 2x2 floor part takes the tiles toward +x and +z of the
+    /// ship. So each door's frame (the rotation and position the game reads from the part to place
+    /// its model, colliders, interaction, magnet and docking joint) is recentred on its tiles, and
+    /// docking doors are turned to face down or up whatever way the player looked when placing.
+    /// The build preview gets the same frame.
     /// </summary>
     internal static class HullDoors
     {
@@ -32,18 +41,9 @@ namespace StellarDriveDemoTF.Devices
         public const ushort DockDown = 7183;
         public const ushort DockUp = 7184;
 
-        /// <summary>How the door's content sits in the part: rotation and offset, for the magnet and joint.</summary>
-        private static readonly Dictionary<ushort, (Quaternion Rotation, Vector3 Offset)> Tilts = new Dictionary<ushort, (Quaternion, Vector3)>
-        {
-            [Trapdoor2] = (Quaternion.Euler(90f, 0f, 0f), Vector3.zero),
-            [Trapdoor1] = (Quaternion.Euler(90f, 0f, 0f), new Vector3(-0.25f, 0f, -0.25f)),
-            // Outward side (+z of the wall door) down
-            [DockDown] = (Quaternion.Euler(90f, 0f, 0f), Vector3.zero),
-            // Outward side up; the turn moves the door to -z, shifted back over its tiles
-            [DockUp] = (Quaternion.Euler(-90f, 0f, 0f), new Vector3(0f, 0f, 1f))
-        };
+        private static readonly Vector3 Corner2 = new Vector3(0.5f, 0.5f, 0f);
 
-        public static bool IsTilted(ushort id) => Tilts.ContainsKey(id);
+        public static bool IsFloorDoor(ushort id) => id >= Trapdoor2 && id <= DockUp;
 
         public static bool IsDock(ushort id) => id == DockDown || id == DockUp;
 
@@ -51,33 +51,33 @@ namespace StellarDriveDemoTF.Devices
         {
             Add(Trapdoor2, "Door", "Trappe 2×2",
                 "Porte posée dans le sol, sur 2×2 cases : retire 4 dalles de sol et pose la trappe à leur place. S'ouvre et se ferme comme une porte.",
-                2, 1f);
+                2);
             Add(Trapdoor1, "Door", "Trappe 1×1",
                 "Petite porte posée dans le sol, sur une seule case : retire une dalle de sol et pose la trappe à sa place. S'ouvre et se ferme comme une porte.",
-                1, 0.5f);
+                1);
             Add(DockDown, "DockingDoor", "Porte d'amarrage (sol, vers le bas)",
-                "Porte d'amarrage posée dans le sol, sur 2×2 cases, qui s'amarre vers le BAS : sous le vaisseau, elle accroche une porte d'amarrage tournée vers le haut. Mêmes fonctions que la porte d'amarrage du jeu.",
-                2, 1f);
+                "Porte d'amarrage posée dans le sol, sur 2×2 cases, qui s'amarre vers le BAS : sous un vaisseau, elle accroche une porte d'amarrage tournée vers le haut. Mêmes fonctions que la porte d'amarrage du jeu.",
+                2);
             Add(DockUp, "DockingDoor", "Porte d'amarrage (sol, vers le haut)",
-                "Porte d'amarrage posée dans le sol, sur 2×2 cases, qui s'amarre vers le HAUT : sur le toit d'un vaisseau, elle accroche une porte d'amarrage tournée vers le bas. Mêmes fonctions que la porte d'amarrage du jeu.",
-                2, 1f);
+                "Porte d'amarrage posée dans le sol, sur 2×2 cases, qui s'amarre vers le HAUT : sur le toit d'un vaisseau ou d'une base, elle accroche une porte d'amarrage tournée vers le bas. Mêmes fonctions que la porte d'amarrage du jeu.",
+                2);
             TFMod.Log.Msg("registered trapdoors and horizontal docking doors");
         }
 
-        private static void Add(ushort id, string donor, string label, string description, int tiles, float scale)
+        private static void Add(ushort id, string donor, string label, string description, int tiles)
         {
             CustomParts.Register(new CustomPartDefinition
             {
                 Id = id,
                 Name = "TF_" + id,
                 Donor = donor,
-                BuildTab = TFTab.Name,
+                BuildTab = TFTab.ObjectsName,
                 BuildRow = TFTab.DoorsRow,
-                Configure = (settings, prefab) => Configure(id, settings, prefab, label, description, tiles, scale)
+                Configure = (settings, prefab) => Configure(settings, prefab, label, description, tiles)
             });
         }
 
-        private static void Configure(ushort id, PartSettings settings, GameObject prefab, string label, string description, int tiles, float scale)
+        private static void Configure(PartSettings settings, GameObject prefab, string label, string description, int tiles)
         {
             settings.fullLabel = label;
             settings.description = description;
@@ -86,42 +86,56 @@ namespace StellarDriveDemoTF.Devices
             settings.size = new Vector3(tiles, 1f, tiles);
             if (settings is HullPartSettings hull)
             {
-                hull.defaultForward = PartOrientation.Forward;
-                hull.defaultUp = PartOrientation.Up;
+                hull.defaultForward = PartOrientation.Down;
+                hull.defaultUp = PartOrientation.Forward;
                 hull.pivotedSettings = null;
             }
+
+            float scale = tiles == 1 ? 0.5f : 1f;
             if (tiles == 1)
-                settings.mass *= 0.3f;
-
-            (Quaternion rotation, Vector3 offset) = Tilts[id];
-            var contentScale = new Vector3(scale, scale, 1f);
-            // Each top-level container (model, interaction, colliders) turns and shrinks around the part origin
-            foreach (Transform child in prefab.transform.Cast<Transform>().ToList())
             {
-                child.localPosition = offset + rotation * Vector3.Scale(contentScale, child.localPosition);
-                child.localRotation = rotation * child.localRotation;
-                child.localScale = Vector3.Scale(child.localScale, contentScale);
+                settings.mass *= 0.3f;
+                // The model, its colliders and its interaction box all shrink to one tile
+                foreach (Transform child in prefab.transform.Cast<Transform>().ToList())
+                    child.localScale = Vector3.Scale(child.localScale, new Vector3(0.5f, 0.5f, 1f));
             }
-
+            // A thin box over the door's own area, so it never overlaps the walls around the hole
             var bounds = prefab.GetComponent<ShipPartBounds>();
             if (bounds != null)
             {
-                Vector3 center = offset + rotation * Vector3.Scale(contentScale, bounds.center);
-                Vector3 size = rotation * Vector3.Scale(contentScale, bounds.bounds);
-                bounds.center = center;
-                bounds.bounds = new Vector3(Mathf.Abs(size.x), Mathf.Abs(size.y), Mathf.Abs(size.z));
+                bounds.center = Corner2 * scale;
+                bounds.bounds = new Vector3(1.9f * scale, 1.9f * scale, 0.1f);
             }
         }
 
-        /// <summary>The door's own frame in the ship: rotation and position of what the wall door would be.</summary>
-        public static bool TryTilt(StatefulPart part, out Quaternion rotation, out Vector3 offset)
+        /// <summary>
+        /// The frame a floor door's content is placed with, in the ship: its rotation, and how far
+        /// it moves from the game's placement position.
+        /// </summary>
+        public static void Frame(ushort id, Quaternion placementRotation, out Quaternion rotation, out Vector3 shift)
+        {
+            Vector3 up = placementRotation * Vector3.up;
+            Vector3 forward = placementRotation * Vector3.forward;
+            if (id == DockDown)
+                forward = Vector3.down;
+            else if (id == DockUp)
+                forward = Vector3.up;
+            rotation = Quaternion.LookRotation(forward, up);
+            // Content centre (its corner tile grown by 2x2, or a shrunk 1x1) onto the tiles' centre
+            bool single = id == Trapdoor1;
+            Vector3 contentCenter = single ? Corner2 * 0.5f : Corner2;
+            Vector3 tilesCenter = single ? Vector3.zero : new Vector3(0.5f, 0f, 0.5f);
+            shift = tilesCenter - rotation * contentCenter;
+        }
+
+        public static bool TryFrame(StatefulPart part, out Quaternion rotation, out Vector3 position)
         {
             rotation = Quaternion.identity;
-            offset = Vector3.zero;
-            if (part?.Settings == null || !Tilts.TryGetValue(part.Settings.id, out var tilt))
+            position = Vector3.zero;
+            if (part?.Settings == null || !IsFloorDoor(part.Settings.id) || part.Placement == null)
                 return false;
-            rotation = tilt.Rotation;
-            offset = tilt.Offset;
+            Frame(part.Settings.id, part.Placement.Rotation, out rotation, out Vector3 shift);
+            position = part.Placement.LocalPosition + shift;
             return true;
         }
     }
@@ -132,42 +146,77 @@ namespace StellarDriveDemoTF.Devices
     {
         private static void Postfix(PartSettings part, ref bool __result)
         {
-            if (!__result && part != null && HullDoors.IsTilted(part.id))
+            if (!__result && part != null && HullDoors.IsFloorDoor(part.id))
                 __result = true;
         }
     }
 
     /// <summary>
-    /// A horizontal docking door's magnet (attraction points, alignment) points up or down like
-    /// its model. The game's magnet data reads the part's rotation and position from these two
-    /// properties, so they are turned for the horizontal docking doors only. (Patching the
-    /// magnet struct itself crashed the game: Mono and Harmony disagree on struct methods that
-    /// return structs.)
+    /// The part's rotation and position, read by the game to place the model, the interaction
+    /// box and the colliders, and by the docking magnet: a floor door's recentred frame.
     /// </summary>
     [HarmonyPatch(typeof(StatefulPart))]
-    internal static class HorizontalDockFramePatch
+    internal static class FloorDoorFramePatch
     {
         [HarmonyPatch(nameof(StatefulPart.LocalRotation), MethodType.Getter)]
         [HarmonyPostfix]
         private static void Rotation(StatefulPart __instance, ref Quaternion __result)
         {
-            if (__instance.Settings != null && HullDoors.IsDock(__instance.Settings.id) && HullDoors.TryTilt(__instance, out Quaternion tilt, out _))
-                __result *= tilt;
+            if (HullDoors.TryFrame(__instance, out Quaternion rotation, out _))
+                __result = rotation;
         }
 
         [HarmonyPatch(nameof(StatefulPart.LocalPosition), MethodType.Getter)]
         [HarmonyPostfix]
         private static void Position(StatefulPart __instance, ref Vector3 __result)
         {
-            if (__instance.Settings != null && HullDoors.IsDock(__instance.Settings.id) && HullDoors.TryTilt(__instance, out _, out Vector3 offset)
-                && offset != Vector3.zero)
-                __result += __instance.Placement.Rotation * offset;
+            if (HullDoors.TryFrame(__instance, out _, out Vector3 position))
+                __result = position;
+        }
+    }
+
+    /// <summary>Colliders take the part's position but the placement's rotation: give them the door's.</summary>
+    [HarmonyPatch(typeof(ShipStatefulColliders), nameof(ShipStatefulColliders.AddStatefulPart))]
+    internal static class FloorDoorColliderPatch
+    {
+        private static void Postfix(ShipStatefulColliders __instance, StatefulPart part)
+        {
+            if (part?.Settings == null || !HullDoors.IsFloorDoor(part.Settings.id))
+                return;
+            if (Traverse.Create(__instance).Field("_dynamicColliders").GetValue() is IDictionary colliders
+                && colliders.Contains(part.Id) && colliders[part.Id] is IShipPartDynamicCollider collider && collider.GameObject != null)
+                collider.GameObject.transform.localRotation = part.LocalRotation;
+        }
+    }
+
+    /// <summary>The build preview shows the door where and how it will really be.</summary>
+    [HarmonyPatch(typeof(PartPreview), "UpdatePlacement")]
+    internal static class FloorDoorPreviewPatch
+    {
+        private static void Postfix(PartPreview __instance)
+        {
+            var traverse = Traverse.Create(__instance);
+            var settings = traverse.Field("_actualPreviewSettings").GetValue() as PartSettings;
+            if (settings == null || !HullDoors.IsFloorDoor(settings.id))
+                return;
+            object snapped = traverse.Field("_snappedPlacement").GetValue();
+            var ship = traverse.Field("_ship").GetValue() as IShipPartPlacements;
+            var preview = traverse.Field("_objectPreview").GetValue() as GameObject;
+            if (snapped == null || ship == null || preview == null)
+                return;
+            object placement = Traverse.Create(snapped).Property("HullPartPlacement").GetValue();
+            if (!(placement is HullPartPlacement hull))
+                return;
+            HullDoors.Frame(settings.id, hull.Rotation, out Quaternion rotation, out Vector3 shift);
+            preview.transform.rotation = ship.ToWorldRotation(rotation);
+            Vector3 target = traverse.Field("_previewTargetPos").GetValue<Vector3>();
+            traverse.Field("_previewTargetPos").SetValue(target + ship.ToWorldRotation(Quaternion.identity) * shift);
         }
     }
 
     /// <summary>
-    /// Two docked ships are held where their doors meet. The game computes that from the doors'
-    /// placements as wall doors; for a horizontal docking door it is recomputed with its turn.
+    /// Two docked ships are held where their doors meet. The game reads that from the doors'
+    /// placements; for the floor docking doors it is redone from their real frame.
     /// </summary>
     [HarmonyPatch(typeof(ShipsJointsTreeTracker), "BuildShipGraph")]
     internal static class HorizontalDockJointPatch
@@ -179,10 +228,9 @@ namespace StellarDriveDemoTF.Devices
             object graph = __args.Length > 1 ? __args[1] : null;
             if (graph == null)
                 return;
-            var nodes = Traverse.Create(graph).Property("Nodes").GetValue() as IDictionary;
-            if (nodes == null)
+            if (!(Traverse.Create(graph).Property("Nodes").GetValue() is IDictionary nodes))
                 return;
-            var fixedConnections = new HashSet<DockedJointConnection>();
+            var done = new HashSet<DockedJointConnection>();
             foreach (object node in nodes.Values)
             {
                 if (!(Traverse.Create(node).Property("Connections").GetValue() is IList connections))
@@ -190,7 +238,7 @@ namespace StellarDriveDemoTF.Devices
                 foreach (object connection in connections)
                 {
                     var traverse = Traverse.Create(connection);
-                    if (!(traverse.Property("Connection").GetValue() is DockedJointConnection joint) || !fixedConnections.Add(joint))
+                    if (!(traverse.Property("Connection").GetValue() is DockedJointConnection joint) || !done.Add(joint))
                         continue;
                     var shipA = Traverse.Create(traverse.Property("ShipA").GetValue()).Property("ShipRef").GetValue() as IShipStateRead;
                     var shipB = Traverse.Create(traverse.Property("ShipB").GetValue()).Property("ShipRef").GetValue() as IShipStateRead;
@@ -200,7 +248,6 @@ namespace StellarDriveDemoTF.Devices
             }
         }
 
-        // Finds the pair of docked doors this joint was built from and redoes it if one is horizontal
         private static void Fix(DockedJointConnection joint, IShipStateRead shipA, IShipStateRead shipB)
         {
             foreach (StatefulPart doorA in shipA.GetAllStatefulParts<DockingDoorState>())
@@ -210,19 +257,16 @@ namespace StellarDriveDemoTF.Devices
                     continue;
                 if (!shipB.TryGetStatefulPart(state.DockedConnectedPart.PartId, out StatefulPart doorB))
                     continue;
-                Vector3 wallPositionA = doorA.Placement.LocalPosition + doorA.Placement.Rotation * Center;
-                if ((wallPositionA - joint.PositionA).sqrMagnitude > 0.0001f)
+                // The joint the game built from this pair, with the placements as they are stored
+                Vector3 builtA = doorA.Placement.LocalPosition + doorA.Placement.Rotation * Center;
+                if ((builtA - joint.PositionA).sqrMagnitude > 0.0001f)
                     continue;
-                bool tiltedA = HullDoors.TryTilt(doorA, out Quaternion tiltA, out Vector3 offsetA);
-                bool tiltedB = HullDoors.TryTilt(doorB, out Quaternion tiltB, out Vector3 offsetB);
-                if (!tiltedA && !tiltedB)
+                if (!HullDoors.IsFloorDoor(doorA.Settings.id) && !HullDoors.IsFloorDoor(doorB.Settings.id))
                     return;
-                Quaternion rotationA = doorA.Placement.Rotation * tiltA;
-                Quaternion rotationB = doorB.Placement.Rotation * tiltB;
-                joint.PositionA = doorA.Placement.LocalPosition + doorA.Placement.Rotation * (offsetA + tiltA * Center);
-                joint.RotationA = rotationA * Quaternion.LookRotation(Vector3.back, Vector3.up);
-                joint.PositionB = doorB.Placement.LocalPosition + doorB.Placement.Rotation * (offsetB + tiltB * Center);
-                joint.RotationB = rotationB;
+                joint.PositionA = doorA.LocalPosition + doorA.LocalRotation * Center;
+                joint.RotationA = doorA.LocalRotation * Quaternion.LookRotation(Vector3.back, Vector3.up);
+                joint.PositionB = doorB.LocalPosition + doorB.LocalRotation * Center;
+                joint.RotationB = doorB.LocalRotation;
                 return;
             }
         }

@@ -76,7 +76,7 @@ namespace StellarDriveDemoTF.Infinite
                 Id = id,
                 Name = "TF_" + id,
                 Donor = donor,
-                BuildTab = TFTab.Name,
+                BuildTab = TFTab.ObjectsName,
                 BuildRow = TFTab.InfiniteRow,
                 Configure = (settings, prefab) =>
                 {

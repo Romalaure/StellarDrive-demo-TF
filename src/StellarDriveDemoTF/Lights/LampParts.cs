@@ -36,14 +36,14 @@ namespace StellarDriveDemoTF.Lights
         }
 
         /// <summary>A new part cloned from the Signal Display, in the TF build tab.</summary>
-        internal static void RegisterDonorPart(ushort id, int row, System.Action<PartSettings, GameObject> configure)
+        internal static void RegisterDonorPart(ushort id, int row, System.Action<PartSettings, GameObject> configure, string tab = TFTab.Name)
         {
             CustomParts.Register(new CustomPartDefinition
             {
                 Id = id,
                 Name = "TF_" + id,
                 Donor = Donor,
-                BuildTab = TFTab.Name,
+                BuildTab = tab,
                 BuildRow = row,
                 Configure = configure
             });

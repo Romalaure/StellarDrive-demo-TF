@@ -29,7 +29,7 @@ using WorldTracking.Spaces;
 namespace StellarDriveDemoTF.Devices
 {
     /// <summary>
-    /// Ship schematics: copy the nearest ship (with everything docked to it, its cables, TF paint
+    /// Ship schematics, opened from the schematic tablet item: copy the nearest ship (with everything docked to it, its cables, TF paint
     /// and capsule names) to a file in UserData/TF/schematics, and build it again later, in this
     /// world or another, in front of you. Built on the game's own (developer) ship export and
     /// import. Only the host can use them, since building creates ships in the world it runs.
@@ -38,8 +38,6 @@ namespace StellarDriveDemoTF.Devices
     internal static class Schematics
     {
         private const int FormatVersion = 1;
-
-        private static readonly KeySetting Key = new KeySetting(() => Settings.SchematicsKey);
 
         private static string Folder => Path.Combine(MelonEnvironment.UserDataDirectory, "TF", "schematics");
 
@@ -79,14 +77,6 @@ namespace StellarDriveDemoTF.Devices
             public int Ships;
             public int Parts;
         }
-
-        public static void Update()
-        {
-            if (Key.WasPressed && !ModMenu.IsOpen && GameServices.ShipsClient != null)
-                SchematicsMenu.Show();
-        }
-
-        public static string KeyLabel => Key.Label;
 
         public static List<Entry> List()
         {
