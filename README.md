@@ -2,6 +2,17 @@
 
 MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](https://github.com/jollyname/StellarModManager).
 
+## Features
+
+- **Paint tool**: the demo contains the game's paint tool but never hands it out. Press **F8** in a
+  world to get one. It paints walls and floors (game feature) and, with this mod, doors, machines
+  and every other placed part. Part colors are saved in `tf-paint.json` next to the world save
+  (save from the pause menu: quitting does not save) and synced to every player who has the mod.
+- **Spray gun model**: replaces the placeholder paint tool model with a spray gun whose cup and
+  nozzle show the selected color.
+
+Settings live in `UserData/MelonPreferences.cfg` under `[TF]`.
+
 ## Requirements
 
 - StellarDrive Demo with MelonLoader 0.7.x installed

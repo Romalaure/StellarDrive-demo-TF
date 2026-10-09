@@ -16,10 +16,15 @@ namespace StellarDriveDemoTF.Common
     internal static class GameDump
     {
         private static bool _done;
+        private static float _nextCheck;
 
         public static void Update()
         {
-            if (_done || !Settings.DumpOnWorldLoad.Value || GameServices.ShipsClient == null)
+            if (_done || !Settings.DumpOnWorldLoad.Value || Time.unscaledTime < _nextCheck)
+                return;
+            _nextCheck = Time.unscaledTime + 5f;
+            // Part definitions load with the world, after the client services exist
+            if (GameServices.ShipsClient == null || Resources.FindObjectsOfTypeAll<PartSettings>().Length == 0)
                 return;
             _done = true;
             try

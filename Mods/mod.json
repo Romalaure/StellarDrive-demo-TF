@@ -1,7 +1,7 @@
-﻿{
+{
     "id": "StellarDriveDemoTF",
     "name": "StellarDrive Demo TF",
     "author": "Romalaure",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "TF group mod. Paint tool: unlocks the hidden paint gun (F8) and lets it color doors, machines and every placed part, saved and synced in multiplayer."
 }
