@@ -21,16 +21,20 @@ namespace StellarDriveDemoTF
             Log = LoggerInstance;
             Settings.Load();
             PaintNet.InstallSerializers();
+            TFNet.InstallSerializers();
+            Devices.TeleportCapsule.Install();
+            Devices.Radio.Install();
+            Devices.Outfits.Install();
             Log.Msg("ready");
         }
 
         public override void OnLateInitializeMelon()
         {
-            // Lamps, the camera, chairs and infinite parts are new parts built with SDModKit; paint works without it
+            // Lamps, the camera, chairs, infinite parts and devices are new parts built with SDModKit; paint works without it
             if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.GetName().Name == "SDModKit"))
                 RegisterParts();
             else
-                Log.Warning("SDModKit is not installed: lamps, camera, chairs and infinite parts are disabled");
+                Log.Warning("SDModKit is not installed: lamps, camera, chairs, infinite parts, radio, wardrobe and teleport capsule are disabled");
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -41,6 +45,9 @@ namespace StellarDriveDemoTF
             Try("the camera", Cameras.CameraParts.Register);
             Try("chairs", Chairs.ChairParts.Register);
             Try("infinite parts", Infinite.InfiniteParts.Register);
+            Try("the teleport capsule", Devices.TeleportCapsule.Register);
+            Try("the radio", Devices.Radio.Register);
+            Try("the wardrobe", Devices.Wardrobe.Register);
         }
 
         private static void Try(string what, Action register)
@@ -58,6 +65,7 @@ namespace StellarDriveDemoTF
         public override void OnSceneWasLoaded(int buildIndex, string sceneName)
         {
             GameServices.Invalidate();
+            ModMenu.Reset();
         }
 
         public override void OnUpdate()
@@ -67,6 +75,11 @@ namespace StellarDriveDemoTF
             PaintHud.Update();
             GameDump.Update();
             Cameras.CameraTablet.Update();
+            TFNet.Update();
+            UsableParts.Update();
+            Devices.Outfits.Update();
+            Devices.RadioSound.Update();
+            Devices.ThirdPerson.Update();
         }
 
         public override void OnLateUpdate()
@@ -78,6 +91,10 @@ namespace StellarDriveDemoTF
         {
             PaintHud.Draw();
             Cameras.CameraTablet.Draw();
+            UsableParts.Draw();
+            Devices.TeleportMenu.Draw();
+            Devices.RadioMenu.Draw();
+            Devices.WardrobeMenu.Draw();
         }
     }
 }

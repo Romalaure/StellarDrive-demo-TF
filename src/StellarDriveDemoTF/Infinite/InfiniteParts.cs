@@ -1,11 +1,14 @@
 using System.Collections.Generic;
 using System.Reflection;
+using Core.Services;
 using HarmonyLib;
+using Items.Interface.Service;
 using Items.Model;
 using Research;
 using SDModKit.Game;
 using Ships;
 using Ships.Cables.Fluids;
+using Ships.Interface.Model;
 using Ships.Interface.Model.Parts;
 using Ships.Interface.Model.Parts.State;
 using Ships.Interface.Model.Parts.StateTypes;
@@ -117,8 +120,45 @@ namespace StellarDriveDemoTF.Infinite
 
         public static InventorySlot ChestSlot(byte slotId) =>
             slotId < ChestItems.Length
-                ? new InventorySlot { HasItem = true, ItemId = ChestItems[slotId], Quantity = ChestStack }
+                ? new InventorySlot { HasItem = true, ItemId = ChestItems[slotId], Quantity = StackOf(ChestItems[slotId]) }
                 : new InventorySlot { HasItem = false };
+
+        private static IItemSettingsProvider _items;
+
+        // A full stack of the item, as large as the game (or a stack size mod) allows
+        private static byte StackOf(uint itemId)
+        {
+            try
+            {
+                if (_items == null)
+                    _items = ServiceLocator.GetService<IItemSettingsProvider>();
+                ItemSettings item = _items?.GetItemSettingsById(itemId);
+                if (item != null && item.maxStackSize > 0)
+                    return item.maxStackSize;
+            }
+            catch (System.Exception)
+            {
+                // items not loaded yet
+            }
+            return ChestStack;
+        }
+
+        /// <summary>The chest's state with every resource slot full and the bin empty.</summary>
+        public static IStatefulPartState Refilled(IStatefulPartState state)
+        {
+            if (!(state is IStoragePart storage))
+                return state;
+            for (byte slot = 0; slot < storage.SlotCount; slot++)
+            {
+                InventorySlot wanted = ChestSlot(slot);
+                InventorySlot current = storage.GetSlot(slot);
+                if (current.HasItem != wanted.HasItem || current.ItemId != wanted.ItemId || current.Quantity != wanted.Quantity)
+                    storage = storage.WithUpdatedSlot(slot, wanted);
+            }
+            return (IStatefulPartState)storage;
+        }
+
+        public static bool IsResourceChest(StatefulPart part) => part?.Settings != null && part.Settings.id == ResourceChest;
     }
 
     /// <summary>New infinite parts start full: tanks with their fluid, the chest with its resources.</summary>
@@ -134,12 +174,9 @@ namespace StellarDriveDemoTF.Infinite
             {
                 __result = (IStatefulPartState)tank.WithFluid(fluid, FluidTankState.Capacity, 0f);
             }
-            else if (partSettings.id == InfiniteParts.ResourceChest && __result is StorageState chest)
+            else if (partSettings.id == InfiniteParts.ResourceChest)
             {
-                IStoragePart filled = chest;
-                for (byte slot = 0; slot < InfiniteParts.ChestItems.Length; slot++)
-                    filled = filled.WithUpdatedSlot(slot, InfiniteParts.ChestSlot(slot));
-                __result = (IStatefulPartState)filled;
+                __result = InfiniteParts.Refilled(__result);
             }
         }
     }
@@ -193,8 +230,44 @@ namespace StellarDriveDemoTF.Infinite
     {
         private static void Prefix(TrackedShipServer __instance, ushort partId, byte slotId, ref InventorySlot slotData)
         {
-            if (__instance.TryGetStatefulPart(partId, out StatefulPart part) && part.Settings != null && part.Settings.id == InfiniteParts.ResourceChest)
+            if (__instance.TryGetStatefulPart(partId, out StatefulPart part) && InfiniteParts.IsResourceChest(part))
                 slotData = InfiniteParts.ChestSlot(slotId);
+        }
+    }
+
+    /// <summary>
+    /// Whatever writes the resource chest's state (the inventory, other mods moving items, a save
+    /// from an older version), it is stored full. Runs wherever ship states change.
+    /// </summary>
+    [HarmonyPatch(typeof(ShipState), nameof(ShipState.SetPartState))]
+    internal static class InfiniteChestStatePatch
+    {
+        private static void Prefix(ShipState __instance, ushort id, ref IStatefulPartState state)
+        {
+            if (state is IStoragePart && __instance.TryGetPart(id, out StatefulPart part) && InfiniteParts.IsResourceChest(part))
+                state = InfiniteParts.Refilled(state);
+        }
+    }
+
+    /// <summary>Reading a resource chest slot on the server always finds it full (or the bin empty).</summary>
+    [HarmonyPatch(typeof(TrackedShipServer), nameof(TrackedShipServer.TryGetChestSlot))]
+    internal static class InfiniteChestReadServerPatch
+    {
+        private static void Postfix(TrackedShipServer __instance, ushort partId, byte slotId, ref InventorySlot slot, bool __result)
+        {
+            if (__result && __instance.TryGetStatefulPart(partId, out StatefulPart part) && InfiniteParts.IsResourceChest(part))
+                slot = InfiniteParts.ChestSlot(slotId);
+        }
+    }
+
+    /// <summary>The chest window shows the resource chest full, even before the server's update arrives.</summary>
+    [HarmonyPatch(typeof(TrackedShipClient), nameof(TrackedShipClient.TryGetChestSlot))]
+    internal static class InfiniteChestReadClientPatch
+    {
+        private static void Postfix(TrackedShipClient __instance, ushort partId, byte slotId, ref InventorySlot slot, bool __result)
+        {
+            if (__result && __instance.State.TryGetPart(partId, out StatefulPart part) && InfiniteParts.IsResourceChest(part))
+                slot = InfiniteParts.ChestSlot(slotId);
         }
     }
 

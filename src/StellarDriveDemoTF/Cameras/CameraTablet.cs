@@ -16,8 +16,10 @@ namespace StellarDriveDemoTF.Cameras
     /// <summary>
     /// The camera tablet: a key (F9) brings up a tablet on screen showing what a placed
     /// surveillance camera films. Left/right arrows switch camera, P picks the camera part in the
-    /// build tool to place a new one. Keyboard only, so the game keeps the mouse. One shared camera
-    /// renders the feed, only while the tablet is open and at a capped rate.
+    /// build tool to place a new one, Z cycles small / large / full screen. Keyboard only, so the
+    /// game keeps the mouse. One shared camera renders the feed, only while the tablet is open, at
+    /// a capped rate, no wider than the screen shows it and, unless CameraSky is on, without the
+    /// game's full screen atmosphere and cloud passes (they cost more than the scene itself).
     /// </summary>
     internal static class CameraTablet
     {
@@ -32,8 +34,11 @@ namespace StellarDriveDemoTF.Cameras
         private static string _message;
         private static float _messageUntil;
 
-        private static string _keyName;
-        private static Key _key = Key.None;
+        private static readonly KeySetting TabletKey = new KeySetting(() => Settings.TabletKey);
+
+        // Screen size of the image, in GUI units, from the last drawn frame
+        private static float _shownWidth = 640f;
+        private static float _guiScale = 1f;
 
         private static readonly AccessTools.FieldRef<ToolBelt, Core.Values.IntValue> SelectedTool =
             AccessTools.FieldRefAccess<ToolBelt, Core.Values.IntValue>("currentSelectedId");
@@ -52,8 +57,7 @@ namespace StellarDriveDemoTF.Cameras
                 return;
             }
 
-            Key key = ConfiguredKey();
-            if (key != Key.None && keyboard[key].wasPressedThisFrame)
+            if (TabletKey.WasPressed)
             {
                 if (Open)
                     Close();
@@ -74,13 +78,15 @@ namespace StellarDriveDemoTF.Cameras
                 Close();
             else if (keyboard.pKey.wasPressedThisFrame)
                 StartPlacing();
+            else if (keyboard.zKey.wasPressedThisFrame)
+                Settings.TabletSize.Value = (Mathf.Clamp(Settings.TabletSize.Value, 0, 2) + 1) % 3;
         }
 
         public static void LateUpdate()
         {
             bool render = false;
             CameraPartVisuals camera = Open ? Current() : null;
-            if (camera != null && Time.unscaledTime - _lastRender >= 1f / Mathf.Clamp(Settings.CameraFps.Value, 1, 60))
+            if (camera != null && Time.unscaledTime - _lastRender >= 1f / Mathf.Clamp(Settings.CameraFps.Value, 1, 30))
             {
                 Camera viewer = MainCamera.Get();
                 if (viewer != null)
@@ -94,6 +100,17 @@ namespace StellarDriveDemoTF.Cameras
             // Enabled during LateUpdate, the camera renders this frame; otherwise the texture keeps its last image
             if (_feed != null && _feed.enabled != render)
                 _feed.enabled = render;
+            if (_feed != null && render)
+                ApplyQuality();
+        }
+
+        // Without the sky passes the feed is a plain scene render: the game's atmosphere and cloud
+        // features only run for cameras of the Game type
+        private static void ApplyQuality()
+        {
+            CameraType type = Settings.CameraSky.Value ? CameraType.Game : CameraType.Reflection;
+            if (_feed.cameraType != type)
+                _feed.cameraType = type;
         }
 
         private static void Close()
@@ -159,9 +176,11 @@ namespace StellarDriveDemoTF.Cameras
 
         private static void EnsureFeed(Camera viewer)
         {
-            int width = Mathf.Clamp(Settings.CameraResolution.Value, 160, 1920);
+            // Never render more pixels than the tablet screen shows
+            int shown = Mathf.RoundToInt(_shownWidth * _guiScale);
+            int width = Mathf.Clamp(Mathf.Min(Settings.CameraResolution.Value, shown), 160, 2560) / 16 * 16;
             int height = width * 9 / 16;
-            if (_texture == null || _texture.width != width)
+            if (_texture == null || Mathf.Abs(_texture.width - width) > 32)
             {
                 if (_texture != null)
                 {
@@ -170,7 +189,7 @@ namespace StellarDriveDemoTF.Cameras
                     _texture.Release();
                     UnityEngine.Object.Destroy(_texture);
                 }
-                _texture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32) { name = "TF_TabletTexture" };
+                _texture = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32) { name = "TF_TabletTexture", useMipMap = false };
                 _texture.Create();
                 if (_feed != null)
                     _feed.targetTexture = _texture;
@@ -186,7 +205,10 @@ namespace StellarDriveDemoTF.Cameras
             _feed.depth = viewer.depth - 1f;
             _feed.fieldOfView = 75f;
             _feed.nearClipPlane = 0.03f;
+            _feed.farClipPlane = Mathf.Min(viewer.farClipPlane, 2000f);
             _feed.allowMSAA = false;
+            _feed.allowHDR = false;
+            _feed.useOcclusionCulling = false;
             _feed.enabled = false;
             int hidden = 0;
             foreach (string name in HiddenLayers)
@@ -209,21 +231,6 @@ namespace StellarDriveDemoTF.Cameras
             RenderPipelineManager.beginCameraRendering += BeforeCameraRenders;
         }
 
-        private static Key ConfiguredKey()
-        {
-            string name = Settings.TabletKey.Value;
-            if (name == _keyName)
-                return _key;
-            _keyName = name;
-            _key = Key.None;
-            if (!string.IsNullOrWhiteSpace(name) && !Enum.TryParse(name.Trim(), true, out _key))
-            {
-                TFMod.Log.Warning($"unknown key '{name}' for TabletKey");
-                _key = Key.None;
-            }
-            return _key;
-        }
-
         // ---- Drawing ----
 
         private static GUIStyle _bezel, _screen, _title, _text, _small, _hint;
@@ -235,6 +242,7 @@ namespace StellarDriveDemoTF.Cameras
                 return;
             EnsureStyles();
             float scale = Mathf.Clamp(Screen.height / 1080f, 0.7f, 2.5f);
+            _guiScale = scale;
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
             float width = Screen.width / scale;
@@ -257,10 +265,19 @@ namespace StellarDriveDemoTF.Cameras
 
         private static void DrawTablet(float width, float height)
         {
-            // A landscape tablet: dark bezel around a 16:9 screen, at the bottom right
-            const float screenWidth = 640f, screenHeight = 360f, border = 22f;
-            var tablet = new Rect(width - screenWidth - border * 2f - 40f, height - screenHeight - border * 2f - 96f,
-                screenWidth + border * 2f, screenHeight + border * 2f + 34f);
+            // A landscape tablet: dark bezel around a 16:9 screen, at the bottom right; larger sizes
+            // are centered, the last one fills the screen
+            int size = Mathf.Clamp(Settings.TabletSize.Value, 0, 2);
+            float border = size == 2 ? 10f : 22f;
+            float screenWidth = size == 0 ? 640f
+                : size == 1 ? Mathf.Min(width * 0.7f, (height - 160f) * 16f / 9f)
+                : Mathf.Min(width - 20f, (height - 64f) * 16f / 9f);
+            float screenHeight = screenWidth * 9f / 16f;
+            float tabletWidth = screenWidth + border * 2f, tabletHeight = screenHeight + border * 2f + 34f;
+            var tablet = size == 0
+                ? new Rect(width - tabletWidth - 40f, height - tabletHeight - 62f, tabletWidth, tabletHeight)
+                : new Rect((width - tabletWidth) / 2f, (height - tabletHeight) / 2f, tabletWidth, tabletHeight);
+            _shownWidth = screenWidth;
             GUI.Box(tablet, GUIContent.none, _bezel);
             var screen = new Rect(tablet.x + border, tablet.y + border, screenWidth, screenHeight);
             GUI.Box(screen, GUIContent.none, _screen);
@@ -288,7 +305,7 @@ namespace StellarDriveDemoTF.Cameras
             }
 
             GUI.Label(new Rect(tablet.x + border, screen.yMax + 8f, screenWidth, 24f),
-                "<  >  changer de caméra     P  poser une caméra     F9 / Échap  fermer", _hint);
+                "<  >  changer de caméra     Z  " + (size == 2 ? "réduire" : "agrandir") + "     P  poser une caméra     " + TabletKey.Label + " / Échap  fermer", _hint);
             // Front camera dot and home button, for the tablet look
             Fill(new Rect(tablet.center.x - 3f, tablet.y + 8f, 6f, 6f), new Color(0.25f, 0.27f, 0.3f));
         }

@@ -11,7 +11,9 @@ namespace StellarDriveDemoTF.Lights
     /// <summary>
     /// Drives a lamp's light and glowing diffuser. Lamps have no plug and are always on. Painting
     /// the lamp sets the light color; unpainted, it keeps the color its Light was built with.
-    /// Beacons blink and rotating beacons sweep their beam, both purely client-side.
+    /// Beacons blink and rotating beacons sweep their beam, both purely client-side. The light
+    /// itself is drawn by LampGlow: the game's shaders ignore Unity lights, so the Light component
+    /// only carries the lamp's color, range and cone.
     /// Everything is looked up from child objects, since this component is cloned by Instantiate
     /// (its own fields are not copied).
     /// </summary>
@@ -31,8 +33,6 @@ namespace StellarDriveDemoTF.Lights
 
         private Light _light;
         private Renderer[] _diffusers;
-        private float _baseIntensity;
-        private float _baseRange;
         private Color _defaultColor;
         private Quaternion _baseRotation;
         private float _blink;
@@ -41,6 +41,7 @@ namespace StellarDriveDemoTF.Lights
         private float _targetEnvironment = 1f;
         private float _nextEnvironmentCheck;
         private MaterialPropertyBlock _block;
+        private LampGlow _glow;
 
         private bool _hasContext;
         private PartKey _key;
@@ -56,16 +57,17 @@ namespace StellarDriveDemoTF.Lights
             _block = new MaterialPropertyBlock();
             Transform lightObject = transform.Find(LightName);
             _light = lightObject != null ? lightObject.GetComponent<Light>() : null;
-            _baseIntensity = _light != null ? _light.intensity : 0f;
-            _baseRange = _light != null ? _light.range : 0f;
             _defaultColor = _light != null ? _light.color : LampCatalog.DefaultLight;
             _baseRotation = lightObject != null ? lightObject.localRotation : Quaternion.identity;
             Transform diffuser = transform.Find(DiffuserName);
             _diffusers = diffuser != null ? diffuser.GetComponents<Renderer>() : new Renderer[0];
             ReadEffects();
-            // Build menu previews have no context: show the lamp lit, without casting light
             if (_light != null)
+            {
                 _light.enabled = false;
+                _glow = new LampGlow(transform, _light, _spin != 0f);
+            }
+            // Build menu previews have no context: show the lamp lit, without casting light
             Apply(1f, _defaultColor, castLight: false);
         }
 
@@ -92,6 +94,8 @@ namespace StellarDriveDemoTF.Lights
         {
             _hasContext = true;
             _key = new PartKey(context.Part.ShipId, context.Part.PartId);
+            // First update applies the light, even when nothing else changes
+            _shownLevel = -1f;
             _nextRefresh = 0f;
         }
 
@@ -107,7 +111,9 @@ namespace StellarDriveDemoTF.Lights
                 _light.transform.localRotation = Quaternion.AngleAxis(angle, Vector3.up) * _baseRotation;
             }
 
-            bool animated = _blink > 0f;
+            _glow?.Tick();
+
+            bool animated = _blink > 0f || _spin != 0f;
             if (!animated && Time.unscaledTime < _nextRefresh)
                 return;
             _nextRefresh = Time.unscaledTime + 0.2f;
@@ -116,6 +122,9 @@ namespace StellarDriveDemoTF.Lights
             float level = 1f;
             if (_blink > 0f)
                 level = Time.time % _blink < _blink * 0.3f ? 1f : 0f;
+            // A rotating beacon's sweep reads as a pulse on the walls around it
+            if (_spin != 0f)
+                level = 0.45f + 0.55f * Mathf.Abs(Mathf.Sin(Time.time * _spin * Mathf.Deg2Rad));
 
             Color color = PaintNet.Client.TryGet(_key, out PaintData paint) ? (Color)paint.Color : _defaultColor;
 
@@ -126,6 +135,11 @@ namespace StellarDriveDemoTF.Lights
         }
 
         // Eases the lamp toward the brightness its surroundings call for
+        private void OnDestroy()
+        {
+            _glow?.Clear();
+        }
+
         private bool UpdateEnvironment()
         {
             if (!Settings.AdaptiveLamps.Value)
@@ -150,12 +164,11 @@ namespace StellarDriveDemoTF.Lights
         {
             _shownLevel = level;
             _shownColor = color;
-            if (_light != null && castLight)
+            if (_glow != null && castLight)
             {
-                _light.enabled = level > 0.001f;
-                _light.intensity = _baseIntensity * level * _environment;
-                _light.range = _baseRange * Mathf.Lerp(0.85f, 1.15f, Mathf.InverseLerp(DaylightDim, DarkBoost, _environment));
-                _light.color = color;
+                // Lamp light matters at night and indoors; in open daylight it barely shows
+                float surroundings = Mathf.Lerp(0.15f, 1.2f, Mathf.InverseLerp(DaylightDim, DarkBoost, _environment));
+                _glow.SetColor(color, level * surroundings);
             }
             foreach (Renderer renderer in _diffusers)
             {

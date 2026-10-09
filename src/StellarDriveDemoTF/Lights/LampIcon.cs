@@ -49,7 +49,8 @@ namespace StellarDriveDemoTF.Lights
     {
         private static void Postfix(PartSettings part, ref bool __result)
         {
-            if (!__result && part != null && (LampCatalog.IsLamp(part.id) || part.id == Cameras.CameraParts.CameraId))
+            if (!__result && part != null && (LampCatalog.IsLamp(part.id) || part.id == Cameras.CameraParts.CameraId
+                || part.id == Devices.TeleportCapsule.CapsuleId || part.id == Devices.Radio.RadioId || part.id == Devices.Wardrobe.WardrobeId))
                 __result = true;
         }
     }

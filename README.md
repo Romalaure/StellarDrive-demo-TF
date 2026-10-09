@@ -26,12 +26,17 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
     beacon (orange), and corner light, corner strip and corner spotlight, wedge shaped to sit in
     the angle between a ceiling (or floor) and a wall. No plug, always on; painting a lamp sets its
     light color. They adapt to their surroundings: brighter at night and indoors, softer in open
-    daylight.
+    daylight. The game's shaders only take the sun into account, so lamps light the walls, floors
+    and parts around them themselves: per vertex, on the CPU, into overlay meshes, recomputed only
+    when the lamp, the hull or nearby parts change (`LampLightStrength`, 1; 0 turns it off).
   - **Surveillance camera**: fix it on a wall, ceiling or hull; it looks away from its surface,
     tilted 30 degrees (rotate it while placing to aim). Press **F9** for the camera tablet: it
     shows the selected camera's live image (left/right arrows switch camera) and **P** takes out
-    the build tool with a camera selected to place a new one. Cameras only render while the tablet
-    is open (`CameraFps`, 20; `CameraResolution`, 640).
+    the build tool with a camera selected to place a new one, **Z** cycles small / large / full
+    screen (`TabletSize`). Cameras only render while the tablet is open, no wider than the screen
+    shows the image, and without the game's full screen atmosphere and cloud passes, which cost
+    more than the scene itself (`CameraFps`, 15; `CameraResolution`, 960; `CameraSky` turns the sky
+    back on).
   - **Chairs**: rustic chair, futuristic seat, copilot seat, club armchair, bar stool, bench,
     office chair and shuttle passenger seat. They are built on the game's pilot seat, so you sit in
     them the same way, but they have no effect on the ship: next to no weight, no plug, flight
@@ -41,8 +46,22 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
   - **Infinite parts**, cloned from the game's own parts so power, fluid networks, chests, saving
     and sync work as usual: infinite generator (20 kW forever, no wood); infinite oxygen and
     ethanol tanks (always full, they feed connected pipes without end); infinite resource chest
-    (iron, glass, copper, aluminum, wood, ice, biofuel, water and stellar shards that refill as you
-    take them; the last slot is a bin).
+    (iron, glass, copper, aluminum, wood, ice, biofuel, water and stellar shards, full stacks that
+    refill as you take them, whatever moves the items; the last slot is a bin).
+  - **Devices**, used by looking at them and pressing **T** (`UseKey`):
+    - **Teleport capsule**: pick another capsule, on this ship or any other, and the host moves
+      you there (the same way the game respawns a player at a ship). Needs at least two capsules.
+    - **Radio**: plays the game's music tracks (read from its FMOD sound banks) or the sound of a
+      YouTube link. The host decides what each radio plays and every player near it hears it,
+      fading with distance (`RadioVolume`). For YouTube, the mod downloads
+      [yt-dlp](https://github.com/yt-dlp/yt-dlp) once into `UserData/TF/tools`, fetches the audio
+      track and decodes it with Windows Media Foundation into `UserData/TF/radio` (the 8 latest
+      are kept, 20 minutes at most). Only the video id is taken from the link.
+    - **Wardrobe**: choose your suit's main color and your helmet and backpack color
+      (`OutfitPrimary`, `OutfitSecondary`); every player with the mod sees them.
+- **Third person in flight**: from the pilot seat, **V** (`ThirdPersonKey`) moves the view
+  behind the ship, following where you look; the mouse wheel sets the distance
+  (`ThirdPersonDistance`).
 
 Settings live in `UserData/MelonPreferences.cfg` under `[TF]`.
 

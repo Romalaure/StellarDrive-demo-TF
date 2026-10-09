@@ -14,6 +14,15 @@ namespace StellarDriveDemoTF.Common
         public static MelonPreferences_Entry<string> TabletKey { get; private set; }
         public static MelonPreferences_Entry<int> CameraFps { get; private set; }
         public static MelonPreferences_Entry<int> CameraResolution { get; private set; }
+        public static MelonPreferences_Entry<bool> CameraSky { get; private set; }
+        public static MelonPreferences_Entry<int> TabletSize { get; private set; }
+        public static MelonPreferences_Entry<float> LampLightStrength { get; private set; }
+        public static MelonPreferences_Entry<string> UseKey { get; private set; }
+        public static MelonPreferences_Entry<string> ThirdPersonKey { get; private set; }
+        public static MelonPreferences_Entry<float> ThirdPersonDistance { get; private set; }
+        public static MelonPreferences_Entry<float> RadioVolume { get; private set; }
+        public static MelonPreferences_Entry<string> OutfitPrimary { get; private set; }
+        public static MelonPreferences_Entry<string> OutfitSecondary { get; private set; }
 
         public static void Load()
         {
@@ -30,10 +39,28 @@ namespace StellarDriveDemoTF.Common
                 description: "Let the TF copilot seat fly the ship like the pilot seat. Off: like every TF chair, it has no effect on the ship.");
             TabletKey = _category.CreateEntry("TabletKey", "F9",
                 description: "Key (UnityEngine.InputSystem.Key name) that opens and closes the camera tablet. Empty disables it.");
-            CameraFps = _category.CreateEntry("CameraFps", 20,
+            CameraFps = _category.CreateEntry("CameraFps", 15,
                 description: "Refreshes per second of the camera image on the tablet. Cameras only render while the tablet is open.");
-            CameraResolution = _category.CreateEntry("CameraResolution", 640,
-                description: "Width in pixels of the camera image on the tablet.");
+            CameraResolution = _category.CreateEntry("CameraResolution", 960,
+                description: "Largest width in pixels of the camera image. The image is never rendered wider than the tablet screen shows it.");
+            CameraSky = _category.CreateEntry("CameraSky", false,
+                description: "Render the atmosphere and clouds in the camera image. Costly: off, the camera skips the game's two full screen sky passes.");
+            TabletSize = _category.CreateEntry("TabletSize", 0,
+                description: "Camera tablet size: 0 small, 1 large, 2 full screen. Z in the tablet cycles it.");
+            LampLightStrength = _category.CreateEntry("LampLightStrength", 1f,
+                description: "How strongly TF lamps light up the walls, floors and parts around them. 0 turns their lighting off.");
+            UseKey = _category.CreateEntry("UseKey", "T",
+                description: "Key (UnityEngine.InputSystem.Key name) to use the TF part you look at: radio, wardrobe, teleport capsule.");
+            ThirdPersonKey = _category.CreateEntry("ThirdPersonKey", "V",
+                description: "Key (UnityEngine.InputSystem.Key name) that switches between first and third person while flying from the pilot seat.");
+            ThirdPersonDistance = _category.CreateEntry("ThirdPersonDistance", 1f,
+                description: "Third person camera distance, as a multiple of the ship size. The mouse wheel changes it in flight.");
+            RadioVolume = _category.CreateEntry("RadioVolume", 0.7f,
+                description: "Volume of TF radios, from 0 to 1.");
+            OutfitPrimary = _category.CreateEntry("OutfitPrimary", "",
+                description: "Your suit's main color (hex, like 3A7BD5), set in the TF wardrobe. Empty keeps the game's color.");
+            OutfitSecondary = _category.CreateEntry("OutfitSecondary", "",
+                description: "Your helmet and backpack color (hex), set in the TF wardrobe. Empty keeps the game's color.");
         }
     }
 }

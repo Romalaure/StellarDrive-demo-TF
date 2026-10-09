@@ -1,4 +1,5 @@
 using Core.Services;
+using Players.Interface.Model;
 using Players.Interface.Services;
 using Players.Services;
 using Ships.Cables;
@@ -18,8 +19,20 @@ namespace StellarDriveDemoTF.Common
         private static readonly CachedService<PlayersServerTracker> PlayersServerCache = new CachedService<PlayersServerTracker>();
         private static readonly CachedService<IPlayerPaintToolSelectionTracker> PaintSelectionCache = new CachedService<IPlayerPaintToolSelectionTracker>();
         private static readonly CachedService<CablesClientTracker> CablesClientCache = new CachedService<CablesClientTracker>();
+        private static readonly CachedService<PlayersClientTracker> PlayersClientCache = new CachedService<PlayersClientTracker>();
 
         public static CablesClientTracker CablesClient => CablesClientCache.Get();
+        public static PlayersClientTracker PlayersClient => PlayersClientCache.Get();
+
+        /// <summary>What the local player is doing (walking, piloting...), or Unset outside a world.</summary>
+        public static PlayerState LocalState
+        {
+            get
+            {
+                PlayersClientTracker players = PlayersClient;
+                return players != null && players.TryGetLocalPlayerState(out PlayerState state) ? state : default;
+            }
+        }
 
         public static ShipsClientTracker ShipsClient => ShipsClientCache.Get();
         public static ShipsServerTracker ShipsServer => ShipsServerCache.Get();
@@ -33,6 +46,7 @@ namespace StellarDriveDemoTF.Common
             PlayersServerCache.Reset();
             PaintSelectionCache.Reset();
             CablesClientCache.Reset();
+            PlayersClientCache.Reset();
         }
 
         private sealed class CachedService<T> where T : class
