@@ -2,7 +2,7 @@
     "id": "StellarDriveDemoTF",
     "name": "StellarDrive Demo TF",
     "author": "Romalaure",
-    "version": "0.7.0",
+    "version": "0.8.0",
     "description": "Mod du groupe TF. Pistolet a peinture (F8) : peint murs, sols, portes, machines et toutes les pieces, avec finitions (brillance, metal, neon), camouflage, prereglages et HUD. Onglet de construction TF : 15 luminaires qui s'adaptent a la lumiere ambiante (dont lampes d'angle, balise clignotante et gyrophare), camera de surveillance visible sur une tablette (F9), 8 chaises et objets infinis (generateur, reservoirs d'oxygene et d'ethanol, coffre de ressources). Necessite SDModKit pour les nouvelles pieces. Tous les joueurs doivent avoir le mod.",
     "thumbnail": "thumbnail.png",
     "images": [
