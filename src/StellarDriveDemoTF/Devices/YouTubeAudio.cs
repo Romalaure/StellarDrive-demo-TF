@@ -86,6 +86,7 @@ namespace StellarDriveDemoTF.Devices
                 string downloaded = Download(ytDlp, job.VideoId);
                 job.Step = "Préparation du son";
                 string partial = wav + ".tmp";
+                Mp4Fixup.StripEditLists(downloaded);
                 MediaFoundationDecoder.ToWav(downloaded, partial, MaxSeconds);
                 if (File.Exists(wav))
                     File.Delete(wav);

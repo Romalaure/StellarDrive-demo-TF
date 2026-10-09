@@ -51,19 +51,36 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
   - **Devices**, used by looking at them and pressing **T** (`UseKey`):
     - **Teleport capsule**: pick another capsule, on this ship or any other, and the host moves
       you there (the same way the game respawns a player at a ship). Needs at least two capsules.
+      Capsules can be named; names are synced and saved in `tf-data.json` next to the world.
     - **Radio**: plays the game's music tracks (read from its FMOD sound banks) or the sound of a
       YouTube link. The host decides what each radio plays and every player near it hears it,
       fading with distance (`RadioVolume`). For YouTube, the mod downloads
       [yt-dlp](https://github.com/yt-dlp/yt-dlp) once into `UserData/TF/tools`, fetches the audio
       track and decodes it with Windows Media Foundation into `UserData/TF/radio` (the 8 latest
-      are kept, 20 minutes at most). Only the video id is taken from the link.
+      are kept, 20 minutes at most). YouTube's fragmented MP4 carries an edit list that makes
+      Media Foundation stop at once, so it is stripped before decoding. Only the video id is
+      taken from the link.
     - **Wardrobe**: choose your suit's main color and your helmet and backpack color
       (`OutfitPrimary`, `OutfitSecondary`); every player with the mod sees them.
+  - **Trapdoors** (2x2 and 1x1) and **horizontal docking doors** (docking downward or upward):
+    the game's door and docking door, cloned, snapping like floor tiles, with model, colliders and
+    interaction turned 90 degrees. Remove the floor tiles and place them in the gap. For the
+    docking doors the magnet and the docking joint are turned too, so ships dock one above the
+    other.
+- **Ship schematics** (host only, **F10**, `SchematicsKey`): copy the nearest ship, with the
+  ships docked to it, its cables, TF paint and capsule names, to `UserData/TF/schematics`, then
+  build it again in front of you, in this world or another. Uses the game's own developer ship
+  export/import; building is free.
 - **Third person in flight**: from the pilot seat, **V** (`ThirdPersonKey`) moves the view
   behind the ship, following where you look; the mouse wheel sets the distance
   (`ThirdPersonDistance`).
 
 Settings live in `UserData/MelonPreferences.cfg` under `[TF]`.
+
+The mod also works around a game bug: the host sometimes keeps a removed planet space active,
+and every physics tick then throws "Space id N does not exist", which stops ships, players and
+physics for that tick. The planet collider update is skipped for that tick instead. Each patch
+is applied on its own, so a game update breaking one only turns that feature off.
 
 ## Install
 

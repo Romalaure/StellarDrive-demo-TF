@@ -6,9 +6,10 @@ using StellarDriveDemoTF;
 using StellarDriveDemoTF.Common;
 using StellarDriveDemoTF.Paint;
 
-[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.9.0", "Romalaure")]
+[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.10.0", "Romalaure")]
 [assembly: MelonGame("CuriousOwlGames", "StellarDrive")]
 [assembly: MelonOptionalDependencies("SDModKit")]
+[assembly: HarmonyDontPatchAll]
 
 namespace StellarDriveDemoTF
 {
@@ -20,12 +21,42 @@ namespace StellarDriveDemoTF
         {
             Log = LoggerInstance;
             Settings.Load();
+            ApplyPatches();
             PaintNet.InstallSerializers();
             TFNet.InstallSerializers();
             Devices.TeleportCapsule.Install();
             Devices.Radio.Install();
             Devices.Outfits.Install();
             Log.Msg("ready");
+        }
+
+        // One patch class at a time: if a game update breaks one, the others (and the game) keep working
+        private void ApplyPatches()
+        {
+            Type[] types;
+            try
+            {
+                types = typeof(TFMod).Assembly.GetTypes();
+            }
+            catch (System.Reflection.ReflectionTypeLoadException e)
+            {
+                types = e.Types.Where(t => t != null).ToArray();
+            }
+            int applied = 0, failed = 0;
+            foreach (Type type in types.Where(t => t.GetCustomAttributes(typeof(HarmonyLib.HarmonyPatch), false).Length > 0))
+            {
+                try
+                {
+                    HarmonyInstance.CreateClassProcessor(type).Patch();
+                    applied++;
+                }
+                catch (Exception e)
+                {
+                    failed++;
+                    Log.Error($"patch {type.Name} not applied, that feature is off: {e.GetBaseException().Message}");
+                }
+            }
+            Log.Msg($"{applied} patch(es) applied" + (failed > 0 ? $", {failed} failed" : ""));
         }
 
         public override void OnLateInitializeMelon()
@@ -48,6 +79,7 @@ namespace StellarDriveDemoTF
             Try("the teleport capsule", Devices.TeleportCapsule.Register);
             Try("the radio", Devices.Radio.Register);
             Try("the wardrobe", Devices.Wardrobe.Register);
+            Try("trapdoors and horizontal docking doors", Devices.HullDoors.Register);
         }
 
         private static void Try(string what, Action register)
@@ -80,6 +112,7 @@ namespace StellarDriveDemoTF
             Devices.Outfits.Update();
             Devices.RadioSound.Update();
             Devices.ThirdPerson.Update();
+            Devices.Schematics.Update();
         }
 
         public override void OnLateUpdate()
@@ -95,6 +128,7 @@ namespace StellarDriveDemoTF
             Devices.TeleportMenu.Draw();
             Devices.RadioMenu.Draw();
             Devices.WardrobeMenu.Draw();
+            Devices.SchematicsMenu.Draw();
         }
     }
 }

@@ -19,6 +19,9 @@ namespace StellarDriveDemoTF.Common
         Teleport = 2,
         /// <summary>Server to one client: the teleport was refused, Text says why.</summary>
         TeleportRefused = 3,
+        /// <summary>Client to server, then server to everyone: capsule A/B is now called Text.</summary>
+        CapsuleName = 4,
+
         /// <summary>Client to server, then server to everyone: radio A/B now plays Text.</summary>
         Radio = 10,
         /// <summary>Client to server, then server to everyone: player A wears Text ("RRGGBB RRGGBB").</summary>

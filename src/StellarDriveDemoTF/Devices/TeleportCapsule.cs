@@ -41,11 +41,66 @@ namespace StellarDriveDemoTF.Devices
             TFMod.Log.Msg("registered the teleport capsule");
         }
 
+        /// <summary>Capsule names chosen by players, kept by the host and saved with the world.</summary>
+        internal static readonly Dictionary<PartKey, string> ServerNames = new Dictionary<PartKey, string>();
+        internal static readonly Dictionary<PartKey, string> ClientNames = new Dictionary<PartKey, string>();
+
+        public const int MaxNameLength = 32;
+
         /// <summary>Network handlers; installed whether or not the part could be registered.</summary>
         public static void Install()
         {
             TFNet.OnServer(TFMessageKind.Teleport, ServerTeleport);
             TFNet.OnClient(TFMessageKind.TeleportRefused, (kind, a, b, text) => TeleportMenu.Refused(text));
+            TFNet.OnServer(TFMessageKind.CapsuleName, ServerRename);
+            TFNet.OnClient(TFMessageKind.CapsuleName, (kind, ship, part, name) =>
+            {
+                var key = new PartKey(ship, part);
+                if (string.IsNullOrEmpty(name))
+                    ClientNames.Remove(key);
+                else
+                    ClientNames[key] = name;
+            });
+            TFNet.SyncRequested += connection =>
+            {
+                foreach (KeyValuePair<PartKey, string> entry in ServerNames.ToList())
+                    TFNet.SendTo(connection, TFMessageKind.CapsuleName, entry.Key.ShipId, entry.Key.PartId, entry.Value);
+            };
+            TFNet.Disconnected += () => ClientNames.Clear();
+        }
+
+        /// <summary>Letters, digits, spaces and common punctuation, at most 32 characters.</summary>
+        public static string CleanName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return "";
+            var clean = new System.Text.StringBuilder();
+            foreach (char c in name.Trim())
+            {
+                if (clean.Length >= MaxNameLength)
+                    break;
+                if (!char.IsControl(c) && c != '<' && c != '>')
+                    clean.Append(c);
+            }
+            return clean.ToString().Trim();
+        }
+
+        public static string NameOf(PartKey capsule, int number) =>
+            ClientNames.TryGetValue(capsule, out string name) && name.Length > 0 ? name : "Capsule " + number;
+
+        private static void ServerRename(NetworkConnection sender, TFMessageKind kind, uint shipId, ushort partId, string text)
+        {
+            var ships = ServiceLocator.GetService<IShipsServerProvider>();
+            if (ships == null || !ships.TryGetShip(shipId, out IShipStateRead ship) || !ship.TryGetStatefulPart(partId, out StatefulPart part)
+                || part.Settings == null || part.Settings.id != CapsuleId)
+                return;
+            string name = CleanName(text);
+            var key = new PartKey(shipId, partId);
+            if (name.Length == 0)
+                ServerNames.Remove(key);
+            else
+                ServerNames[key] = name;
+            TFNet.SendToAll(TFMessageKind.CapsuleName, shipId, partId, name);
         }
 
         private static void Configure(PartSettings settings, GameObject prefab)
@@ -206,10 +261,13 @@ namespace StellarDriveDemoTF.Devices
         private static string _message;
         private static float _messageUntil;
         private static float _flashUntil;
+        private static string _nameField = "";
 
         public static void Show(PartKey from)
         {
             _from = from;
+            TeleportCapsule.ClientNames.TryGetValue(from, out string current);
+            _nameField = current ?? "";
             _open = true;
             _scroll = Vector2.zero;
             ModMenu.Open(() => _open = false);
@@ -245,8 +303,18 @@ namespace StellarDriveDemoTF.Devices
         private static void DrawWindow(float width, float height)
         {
             List<PartKey> capsules = TeleportCapsule.KnownCapsules();
-            Rect area = DeviceUi.Window(width, height, 520f, 460f, "CAPSULE DE TÉLÉPORTATION");
+            Rect area = DeviceUi.Window(width, height, 540f, 560f, "CAPSULE DE TÉLÉPORTATION");
             GUILayout.BeginArea(area);
+            GUILayout.Label("NOM DE CETTE CAPSULE", DeviceUi.Muted);
+            GUILayout.BeginHorizontal();
+            _nameField = GUILayout.TextField(_nameField ?? "", TeleportCapsule.MaxNameLength, DeviceUi.Field, GUILayout.Height(34f), GUILayout.ExpandWidth(true));
+            if (GUILayout.Button("Renommer", DeviceUi.Button, GUILayout.Width(110f), GUILayout.Height(34f)))
+            {
+                _nameField = TeleportCapsule.CleanName(_nameField);
+                TFNet.SendToServer(TFMessageKind.CapsuleName, _from.ShipId, _from.PartId, _nameField);
+            }
+            GUILayout.EndHorizontal();
+            GUILayout.Space(12f);
             if (capsules.Count < TeleportCapsule.MinCapsules)
             {
                 GUILayout.Label("Il faut au moins deux capsules pour se téléporter.", DeviceUi.Text);
@@ -257,14 +325,14 @@ namespace StellarDriveDemoTF.Devices
             {
                 GUILayout.Label("Choisis ta destination :", DeviceUi.Text);
                 GUILayout.Space(6f);
-                _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(300f));
+                _scroll = GUILayout.BeginScrollView(_scroll, GUILayout.Height(290f));
                 int number = 0;
                 foreach (PartKey capsule in capsules)
                 {
                     number++;
                     bool here = capsule.Equals(_from);
                     string where = capsule.ShipId == _from.ShipId ? "ce vaisseau" : "vaisseau n°" + capsule.ShipId;
-                    string label = $"Capsule {number}   ·   {where}" + (here ? "   ·   tu es ici" : "");
+                    string label = $"{TeleportCapsule.NameOf(capsule, number)}   ·   {where}" + (here ? "   ·   tu es ici" : "");
                     GUI.enabled = !here;
                     if (GUILayout.Button(label, DeviceUi.Button, GUILayout.Height(40f)))
                         Go(capsule);

@@ -23,6 +23,7 @@ namespace StellarDriveDemoTF.Common
         public static MelonPreferences_Entry<float> RadioVolume { get; private set; }
         public static MelonPreferences_Entry<string> OutfitPrimary { get; private set; }
         public static MelonPreferences_Entry<string> OutfitSecondary { get; private set; }
+        public static MelonPreferences_Entry<string> SchematicsKey { get; private set; }
 
         public static void Load()
         {
@@ -59,6 +60,8 @@ namespace StellarDriveDemoTF.Common
                 description: "Volume of TF radios, from 0 to 1.");
             OutfitPrimary = _category.CreateEntry("OutfitPrimary", "",
                 description: "Your suit's main color (hex, like 3A7BD5), set in the TF wardrobe. Empty keeps the game's color.");
+            SchematicsKey = _category.CreateEntry("SchematicsKey", "F10",
+                description: "Key (UnityEngine.InputSystem.Key name) that opens the ship schematics window (host only).");
             OutfitSecondary = _category.CreateEntry("OutfitSecondary", "",
                 description: "Your helmet and backpack color (hex), set in the TF wardrobe. Empty keeps the game's color.");
         }

@@ -248,6 +248,10 @@ namespace StellarDriveDemoTF.Devices
             string primary = TryParse(Settings.OutfitPrimary.Value, out Color a) ? ToHex(a) : "-";
             string secondary = TryParse(Settings.OutfitSecondary.Value, out Color b) ? ToHex(b) : "-";
             TFNet.SendToServer(TFMessageKind.Outfit, 0, 0, primary + " " + secondary);
+            // Show it on our own character at once, without waiting for the host
+            PlayersClientTracker players = GameServices.PlayersClient;
+            if (players != null && players.LocalPlayer != null)
+                ClientOutfits[players.LocalPlayer.Id] = primary + " " + secondary;
         }
 
         private static void OnServerOutfit(NetworkConnection sender, TFMessageKind kind, uint a, ushort b, string text)
@@ -268,7 +272,7 @@ namespace StellarDriveDemoTF.Devices
                 return;
             if (Time.unscaledTime < _nextApply)
                 return;
-            _nextApply = Time.unscaledTime + 0.5f;
+            _nextApply = Time.unscaledTime + 1f;
 
             TrackedPlayerLocalClient local = players.LocalPlayer;
             if (ClientOutfits.TryGetValue(local.Id, out string own))
@@ -283,19 +287,18 @@ namespace StellarDriveDemoTF.Devices
             }
         }
 
+        // Same way as part paint: one property block per material slot, keeping what the game set.
+        // Applied again every second, since the game may set its own blocks on the character
         private static void Apply(GameObject visual, string outfit)
         {
             if (visual == null)
                 return;
-            int id = visual.GetInstanceID();
-            if (Applied.TryGetValue(id, out string done) && done == outfit)
-                return;
-            Applied[id] = outfit;
-
             string[] parts = outfit.Split(' ');
             bool hasPrimary = TryParse(parts.Length > 0 ? parts[0] : "", out Color primary);
             bool hasSecondary = TryParse(parts.Length > 1 ? parts[1] : "", out Color secondary);
 
+            int tinted = 0;
+            var names = new List<string>();
             foreach (Renderer renderer in visual.GetComponentsInChildren<Renderer>(true))
             {
                 if (!(renderer is SkinnedMeshRenderer || renderer is MeshRenderer))
@@ -304,12 +307,28 @@ namespace StellarDriveDemoTF.Devices
                 if (name.Contains("visor") || name.Contains("cable") || name.Contains("glass") || name.StartsWith("tf_"))
                     continue;
                 bool secondaryPart = name.Contains("helmet") || name.Contains("back") || name.Contains("pack") || name.Contains("tank");
-                bool tinted = secondaryPart ? hasSecondary : hasPrimary;
-                Color color = secondaryPart ? secondary : primary;
-                renderer.GetPropertyBlock(Block);
-                Block.SetColor(ColorId, tinted ? color : Color.white);
-                Block.SetColor(BaseColorId, tinted ? color : Color.white);
-                renderer.SetPropertyBlock(Block);
+                bool apply = secondaryPart ? hasSecondary : hasPrimary;
+                Color color = apply ? (secondaryPart ? secondary : primary) : Color.white;
+                Material[] materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    Material material = materials[i];
+                    if (material == null || (!material.HasProperty(ColorId) && !material.HasProperty(BaseColorId)) || material.renderQueue >= 2450)
+                        continue;
+                    renderer.GetPropertyBlock(Block, i);
+                    Block.SetColor(ColorId, color);
+                    Block.SetColor(BaseColorId, color);
+                    renderer.SetPropertyBlock(Block, i);
+                    tinted++;
+                }
+                names.Add(renderer.gameObject.name + (secondaryPart ? " (2)" : " (1)"));
+            }
+
+            int id = visual.GetInstanceID();
+            if (!Applied.TryGetValue(id, out string done) || done != outfit)
+            {
+                Applied[id] = outfit;
+                TFMod.Log.Msg($"outfit {outfit} on {visual.name}: {tinted} material(s) on {string.Join(", ", names)}");
             }
         }
 

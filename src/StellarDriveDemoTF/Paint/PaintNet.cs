@@ -145,6 +145,14 @@ namespace StellarDriveDemoTF.Paint
             SendToServer(new GiveToolRequest(), OnGiveToolRequest);
         }
 
+        /// <summary>Host only: paints a part directly (schematics) and tells every client.</summary>
+        public static void ServerSet(PartKey key, PaintData paint)
+        {
+            Server.Set(key, paint);
+            if (_network != null && _network.IsServerStarted)
+                _network.ServerManager.Broadcast(new PaintUpdate { ShipId = key.ShipId, PartId = key.PartId, Paint = paint });
+        }
+
         /// <summary>A part was removed from its ship; forget its paint on whichever side this runs.</summary>
         public static void ForgetPart(PartKey key)
         {

@@ -13,6 +13,7 @@ namespace StellarDriveDemoTF.Common
         public const int ChairsRow = 2;
         public const int InfiniteRow = 3;
         public const int DevicesRow = 4;
+        public const int DoorsRow = 5;
 
         /// <summary>Only call when SDModKit is loaded.</summary>
         public static void Declare() => BuildTabs.Declare(Name, 50, LampIcon.Create());

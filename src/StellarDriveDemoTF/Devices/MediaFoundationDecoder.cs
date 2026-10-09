@@ -116,9 +116,15 @@ namespace StellarDriveDemoTF.Devices
                     long written = 0;
                     var chunk = new byte[0];
                     ReadSampleFn read = Call<ReadSampleFn>(reader, ReaderReadSample);
+                    int reads = 0, samples = 0;
+                    uint seenFlags = 0;
                     while (written < maxBytes)
                     {
                         Check(read(reader, FirstAudioStream, 0, out _, out uint flags, out _, out IntPtr sample), "read");
+                        reads++;
+                        seenFlags |= flags;
+                        if (sample != IntPtr.Zero)
+                            samples++;
                         if (sample != IntPtr.Zero)
                         {
                             try
@@ -137,7 +143,7 @@ namespace StellarDriveDemoTF.Devices
                             break;
                     }
                     if (written == 0)
-                        throw new InvalidDataException("no audio decoded");
+                        throw new InvalidDataException($"no audio decoded ({reads} reads, {samples} samples, flags 0x{seenFlags:X})");
                     writer.Seek(0, SeekOrigin.Begin);
                     WriteHeader(writer, channels, rate, written);
                 }
