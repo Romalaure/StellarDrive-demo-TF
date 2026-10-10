@@ -16,6 +16,7 @@ namespace StellarDriveDemoTF.Common
     internal static class MissingSpaceGuard
     {
         private static int _count;
+        private static int _indexCount;
 
         private static Exception Finalizer(Exception __exception)
         {
@@ -23,6 +24,14 @@ namespace StellarDriveDemoTF.Common
             {
                 if (_count++ % 3000 == 0)
                     TFMod.Log.Warning($"skipped a planet collider update: {__exception.Message} (game bug, {_count} so far)");
+                return null;
+            }
+            // Seen thrown on every tick after loading a world, freezing the player; the rethrow
+            // would lose where it came from, so log the full trace here
+            if (__exception is IndexOutOfRangeException)
+            {
+                if (_indexCount++ % 3000 == 0)
+                    TFMod.Log.Warning($"skipped a planet collider update ({_indexCount} so far): {__exception}");
                 return null;
             }
             return __exception;
