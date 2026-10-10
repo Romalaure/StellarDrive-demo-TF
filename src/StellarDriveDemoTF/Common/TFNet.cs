@@ -27,7 +27,14 @@ namespace StellarDriveDemoTF.Common
         /// <summary>Client to server, then server to everyone: radio A/B now plays Text.</summary>
         Radio = 10,
         /// <summary>Client to server, then server to everyone: player A wears Text ("RRGGBB RRGGBB").</summary>
-        Outfit = 20
+        Outfit = 20,
+
+        /// <summary>Client to server: copy the ship A (and what is attached to it) as schematic Text.</summary>
+        SchematicCopy = 30,
+        /// <summary>Either way: piece B of schematic file transfer A, Text is "count|data".</summary>
+        SchematicChunk = 31,
+        /// <summary>Server to one client: how the copy or build went, Text is for the player.</summary>
+        SchematicResult = 32
     }
 
     /// <summary>

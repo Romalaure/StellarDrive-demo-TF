@@ -71,10 +71,11 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
     on its tiles, and docking doors always face down or up, so ships dock one above the other.
 - **Tool rack** (TF Objets): use it to take a paint gun or a **schematic tablet**, a new
   inventory item; held in the hand, a left click opens the schematics window.
-- **Ship schematics** (host only, from the schematic tablet): copy the nearest ship, with the
-  ships docked to it, its cables, TF paint and capsule names, to `UserData/TF/schematics`, then
-  build it again in front of you, in this world or another. Uses the game's own developer ship
-  export/import; building is free.
+- **Ship schematics** (every player, from the schematic tablet): copy the nearest ship, with the
+  ships attached to it (docked ships, rotor parts), its cables, TF paint and capsule names, to
+  `UserData/TF/schematics` on your own PC, then build it again in front of you, in this world or
+  another. The host does the copy and the build; other players' files travel over the network.
+  Uses the game's own developer ship export/import; building is free.
 - **Third person in flight**: from the pilot seat, **V** (`ThirdPersonKey`) moves the view
   behind the ship, following where you look; the mouse wheel sets the distance
   (`ThirdPersonDistance`).

@@ -26,6 +26,7 @@ namespace StellarDriveDemoTF
             TFNet.InstallSerializers();
             Devices.TeleportCapsule.Install();
             Devices.Radio.Install();
+            Devices.Schematics.Install();
             Devices.Outfits.Install();
             Devices.ToolRack.Install();
             Log.Msg("ready");

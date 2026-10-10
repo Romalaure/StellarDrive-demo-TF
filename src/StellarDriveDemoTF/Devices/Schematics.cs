@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using Core.Services;
+using FishNet.Connection;
 using Managers.Client.Utils;
 using MelonLoader.Utils;
 using Newtonsoft.Json;
@@ -32,7 +34,8 @@ namespace StellarDriveDemoTF.Devices
     /// Ship schematics, opened from the schematic tablet item: copy the nearest ship (with everything docked to it, its cables, TF paint
     /// and capsule names) to a file in UserData/TF/schematics, and build it again later, in this
     /// world or another, in front of you. Built on the game's own (developer) ship export and
-    /// import. Only the host can use them, since building creates ships in the world it runs.
+    /// import. Every player can use them: the host does the copy and the build in its world, and
+    /// the files are kept on the PC of the player who copied, sent over the network in pieces.
     /// Building is free: no resources are taken.
     /// </summary>
     internal static class Schematics
@@ -124,17 +127,34 @@ namespace StellarDriveDemoTF.Devices
             return nearest != null && ships.TryGetTrackedRootShip(nearest.Id, out TrackedShipServer root) ? root : null;
         }
 
-        /// <summary>Saves the nearest ship and everything docked to it. Returns a message for the player.</summary>
+        /// <summary>Host: saves the nearest ship and everything attached to it. Returns a message for the player.</summary>
         public static string Copy(string name)
         {
             if (!TFNet.IsServer)
-                return "Seul l'hôte de la partie peut copier un vaisseau.";
+                return RequestCopy(name);
             name = TeleportCapsule.CleanName(name);
             if (name.Length == 0)
                 return "Donne un nom à la schématique.";
+            string message = Export(NearestShip(), name, out SchematicFile file);
+            if (file != null)
+                Save(file);
+            return message;
+        }
+
+        private static void Save(SchematicFile file)
+        {
+            Directory.CreateDirectory(Folder);
+            string path = System.IO.Path.Combine(Folder, FileNameFor(file.name));
+            File.WriteAllText(path, JsonConvert.SerializeObject(file, Formatting.Indented));
+            TFMod.Log.Msg($"schematic '{file.name}' saved: {file.ships} ship(s), {file.parts} part(s) -> {path}");
+        }
+
+        /// <summary>The ship and what is attached to it as a schematic. Returns a message for the player.</summary>
+        private static string Export(TrackedShipServer ship, string name, out SchematicFile file)
+        {
+            file = null;
             ShipsServerTracker service = GameServices.ShipsServer;
             SpacesServer spaces = ServiceLocator.GetService<SpacesServer>();
-            TrackedShipServer ship = NearestShip();
             if (service == null || spaces == null || ship == null)
                 return "Aucun vaisseau à proximité.";
 
@@ -196,7 +216,7 @@ namespace StellarDriveDemoTF.Devices
             }
             data.cables = CablesConverter.ConvertToSerializable(cables.Values.ToArray());
 
-            var file = new SchematicFile
+            file = new SchematicFile
             {
                 name = name,
                 created = DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
@@ -226,10 +246,6 @@ namespace StellarDriveDemoTF.Devices
                     file.capsules.Add(new SavedName { ship = capsule.Key.ShipId, part = capsule.Key.PartId, name = capsule.Value });
             }
 
-            Directory.CreateDirectory(Folder);
-            string path = System.IO.Path.Combine(Folder, FileNameFor(name));
-            File.WriteAllText(path, JsonConvert.SerializeObject(file, Formatting.Indented));
-            TFMod.Log.Msg($"schematic '{name}' saved: {file.ships} ship(s), {file.parts} part(s) -> {path}");
             return $"« {name} » enregistrée : {file.ships} vaisseau(x), {file.parts} pièces.";
         }
 
@@ -275,13 +291,31 @@ namespace StellarDriveDemoTF.Devices
         /// <summary>Builds a saved schematic in front of the player. Returns a message for the player.</summary>
         public static string Build(Entry entry)
         {
+            string text;
+            try
+            {
+                text = File.ReadAllText(entry.Path);
+            }
+            catch (Exception e)
+            {
+                return "Fichier illisible : " + e.Message;
+            }
             if (!TFNet.IsServer)
-                return "Seul l'hôte de la partie peut construire une schématique.";
+                return RequestBuild(text);
+            TrackedPlayerLocalClient player = ServiceLocator.GetService<PlayersClientTracker>()?.LocalPlayer;
+            if (player == null)
+                return "Le monde n'est pas prêt.";
+            return BuildText(text, player.SpaceId, player.Position, player.Rotation);
+        }
+
+        /// <summary>Server: builds a schematic file's text ahead of the given player pose.</summary>
+        private static string BuildText(string text, uint playerSpace, Vector3 playerPosition, Quaternion playerRotation)
+        {
             SchematicFile file;
             ShipImportExportUtils.ShipImportExportData data;
             try
             {
-                file = JsonConvert.DeserializeObject<SchematicFile>(File.ReadAllText(entry.Path));
+                file = JsonConvert.DeserializeObject<SchematicFile>(text);
                 data = JsonUtility.FromJson<ShipImportExportUtils.ShipImportExportData>(file.game);
             }
             catch (Exception e)
@@ -295,12 +329,11 @@ namespace StellarDriveDemoTF.Devices
             ShipsServerTracker ships = GameServices.ShipsServer;
             SpacesServer spaces = ServiceLocator.GetService<SpacesServer>();
             CablesServerTracker cablesTracker = ServiceLocator.GetService<CablesServerTracker>();
-            TrackedPlayerLocalClient player = ServiceLocator.GetService<PlayersClientTracker>()?.LocalPlayer;
-            if (ids == null || ships == null || spaces == null || player == null)
+            if (ids == null || ships == null || spaces == null)
                 return "Le monde n'est pas prêt.";
 
             // Where to build: in the player's world space (outside any ship), ahead of them
-            if (!TryWorldPlacement(player, out uint spaceId, out Vector3 position, out Quaternion rotation))
+            if (!TryWorldPlacement(playerSpace, playerPosition, playerRotation, out uint spaceId, out Vector3 position, out Quaternion rotation))
                 return "Impossible de trouver où construire.";
 
             CableData[] cables = CablesConverter.ConvertToState(data.cables ?? new Saving.Serialization.V12.Cables.SerializableCable[0]);
@@ -430,11 +463,11 @@ namespace StellarDriveDemoTF.Devices
         }
 
         // Climbs out of ship spaces to the space the outermost ship flies in
-        private static bool TryWorldPlacement(TrackedPlayerLocalClient player, out uint spaceId, out Vector3 position, out Quaternion rotation)
+        private static bool TryWorldPlacement(uint playerSpace, Vector3 playerPosition, Quaternion playerRotation, out uint spaceId, out Vector3 position, out Quaternion rotation)
         {
-            spaceId = player.SpaceId;
-            position = player.Position;
-            rotation = player.Rotation;
+            spaceId = playerSpace;
+            position = playerPosition;
+            rotation = playerRotation;
             SpacesServer spaces = ServiceLocator.GetService<SpacesServer>();
             ShipsServerTracker ships = GameServices.ShipsServer;
             for (int depth = 0; depth < 8; depth++)
@@ -452,6 +485,171 @@ namespace StellarDriveDemoTF.Devices
             return false;
         }
 
+        // ---- Other players: the host copies and builds, the files travel in pieces ----
+
+        private const int ChunkLength = 16000;
+        private const int MaxChunks = 1024;
+        private static uint _nextTransfer;
+        private static readonly Dictionary<(int, uint), string[]> Incoming = new Dictionary<(int, uint), string[]>();
+
+        public static void Install()
+        {
+            TFNet.OnServer(TFMessageKind.SchematicCopy, ServerCopy);
+            TFNet.OnServer(TFMessageKind.SchematicChunk, (sender, kind, transfer, index, text) =>
+            {
+                if (sender != null && Receive(sender.ClientId, transfer, index, text, out string json))
+                    ServerBuild(sender, json);
+            });
+            TFNet.OnClient(TFMessageKind.SchematicChunk, (kind, transfer, index, text) =>
+            {
+                if (Receive(-1, transfer, index, text, out string json))
+                    ClientSave(json);
+            });
+            TFNet.OnClient(TFMessageKind.SchematicResult, (kind, a, b, text) => SchematicsMenu.ShowResult(text));
+            TFNet.Disconnected += () => Incoming.Clear();
+        }
+
+        /// <summary>Client: the nearest ship, as this player sees it.</summary>
+        public static TrackedShipClient NearestShipClient()
+        {
+            TrackedPlayerLocalClient player = ServiceLocator.GetService<PlayersClientTracker>()?.LocalPlayer;
+            return player == null ? null : NearestShipUtils.GetNearestShipClient(player.SpaceId, player.Position);
+        }
+
+        private static string RequestCopy(string name)
+        {
+            name = TeleportCapsule.CleanName(name);
+            if (name.Length == 0)
+                return "Donne un nom à la schématique.";
+            TrackedShipClient ship = NearestShipClient();
+            if (ship == null)
+                return "Aucun vaisseau à proximité.";
+            TFNet.SendToServer(TFMessageKind.SchematicCopy, ship.Id, 0, name);
+            return "Copie demandée à l'hôte…";
+        }
+
+        private static string RequestBuild(string text)
+        {
+            SendChunks(text, (transfer, index, chunk) => TFNet.SendToServer(TFMessageKind.SchematicChunk, transfer, index, chunk));
+            return "Schématique envoyée à l'hôte…";
+        }
+
+        private static void ServerCopy(NetworkConnection sender, TFMessageKind kind, uint shipId, ushort b, string name)
+        {
+            if (sender == null)
+                return;
+            name = TeleportCapsule.CleanName(name);
+            string message;
+            SchematicFile file = null;
+            if (name.Length == 0)
+                message = "Donne un nom à la schématique.";
+            else if (GameServices.ShipsServer == null || !GameServices.ShipsServer.TryGetTrackedRootShip(shipId, out TrackedShipServer root))
+                message = "Aucun vaisseau à proximité.";
+            else
+                message = Run(() => Export(root, name, out file));
+            if (file != null)
+            {
+                string json = JsonConvert.SerializeObject(file);
+                SendChunks(json, (transfer, index, chunk) => TFNet.SendTo(sender, TFMessageKind.SchematicChunk, transfer, index, chunk));
+                TFMod.Log.Msg($"schematic '{file.name}' copied for client {sender.ClientId} ({json.Length} chars)");
+            }
+            TFNet.SendTo(sender, TFMessageKind.SchematicResult, 0, 0, message);
+        }
+
+        private static void ServerBuild(NetworkConnection sender, string json)
+        {
+            TrackedPlayerServer player = GameServices.PlayersServer?.GetTrackedPlayerFromConnectionId(sender.ClientId);
+            string message = player == null
+                ? "Le monde n'est pas prêt."
+                : Run(() => BuildText(json, player.SpaceId, player.Position, player.Rotation));
+            TFNet.SendTo(sender, TFMessageKind.SchematicResult, 0, 0, message);
+        }
+
+        private static void ClientSave(string json)
+        {
+            try
+            {
+                var file = JsonConvert.DeserializeObject<SchematicFile>(json);
+                if (file?.name == null)
+                    return;
+                Save(file);
+            }
+            catch (Exception e)
+            {
+                TFMod.Log.Error("schematic received but not saved: " + e);
+                SchematicsMenu.ShowResult("Schématique reçue mais pas enregistrée : " + e.Message);
+            }
+        }
+
+        private static string Run(Func<string> action)
+        {
+            try
+            {
+                return action();
+            }
+            catch (Exception e)
+            {
+                TFMod.Log.Error("schematic: " + e);
+                return "Erreur : " + e.Message;
+            }
+        }
+
+        // The text is gzipped and cut into pieces small enough for one network message each
+        private static void SendChunks(string text, Action<uint, ushort, string> send)
+        {
+            string packed;
+            using (var buffer = new MemoryStream())
+            {
+                using (var zip = new GZipStream(buffer, CompressionMode.Compress))
+                {
+                    byte[] bytes = System.Text.Encoding.UTF8.GetBytes(text);
+                    zip.Write(bytes, 0, bytes.Length);
+                }
+                packed = Convert.ToBase64String(buffer.ToArray());
+            }
+            int count = Math.Max(1, (packed.Length + ChunkLength - 1) / ChunkLength);
+            if (count > MaxChunks)
+                throw new InvalidOperationException("schematic too large to send");
+            uint transfer = ++_nextTransfer;
+            for (int i = 0; i < count; i++)
+            {
+                int start = i * ChunkLength;
+                send(transfer, (ushort)i, count + "|" + packed.Substring(start, Math.Min(ChunkLength, packed.Length - start)));
+            }
+        }
+
+        private static bool Receive(int from, uint transfer, ushort index, string text, out string json)
+        {
+            json = null;
+            int bar = text.IndexOf('|');
+            if (bar <= 0 || !int.TryParse(text.Substring(0, bar), out int count) || count < 1 || count > MaxChunks || index >= count)
+                return false;
+            var key = (from, transfer);
+            if (!Incoming.TryGetValue(key, out string[] pieces) || pieces.Length != count)
+            {
+                // One transfer at a time per sender is plenty
+                foreach (var stale in Incoming.Keys.Where(k => k.Item1 == from).ToList())
+                    Incoming.Remove(stale);
+                Incoming[key] = pieces = new string[count];
+            }
+            pieces[index] = text.Substring(bar + 1);
+            if (pieces.Any(p => p == null))
+                return false;
+            Incoming.Remove(key);
+            try
+            {
+                using (var zip = new GZipStream(new MemoryStream(Convert.FromBase64String(string.Concat(pieces))), CompressionMode.Decompress))
+                using (var reader = new StreamReader(zip, System.Text.Encoding.UTF8))
+                    json = reader.ReadToEnd();
+                return true;
+            }
+            catch (Exception e)
+            {
+                TFMod.Log.Warning("schematic transfer unreadable: " + e.Message);
+                return false;
+            }
+        }
+
         private static string FileNameFor(string name)
         {
             var clean = new string(name.Select(c => System.IO.Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
@@ -467,6 +665,13 @@ namespace StellarDriveDemoTF.Devices
         private static string _message;
         private static Vector2 _scroll;
         private static List<Schematics.Entry> _entries = new List<Schematics.Entry>();
+
+        /// <summary>A message from the host about a copy or build asked by this player.</summary>
+        public static void ShowResult(string message)
+        {
+            _message = message;
+            _entries = Schematics.List();
+        }
 
         public static void Show()
         {
@@ -487,25 +692,18 @@ namespace StellarDriveDemoTF.Devices
 
             Rect area = DeviceUi.Window(width, height, 620f, 680f, "SCHÉMATIQUES DE VAISSEAUX");
             GUILayout.BeginArea(area);
-            if (!TFNet.IsServer)
-            {
-                GUILayout.Label("Seul l'hôte de la partie peut copier et construire des vaisseaux : les schématiques sont enregistrées sur son PC.", DeviceUi.Text);
-                GUILayout.FlexibleSpace();
-                if (GUILayout.Button("Fermer (Échap)", DeviceUi.Button, GUILayout.Height(34f)))
-                    ModMenu.Close();
-                GUILayout.EndArea();
-                GUI.matrix = previous;
-                return;
-            }
-
-            TrackedShipServer nearest = Schematics.NearestShip();
+            bool host = TFNet.IsServer;
+            TrackedShipServer nearest = host ? Schematics.NearestShip() : null;
+            TrackedShipClient nearestClient = host ? null : Schematics.NearestShipClient();
             GUILayout.Label("COPIER LE VAISSEAU LE PLUS PROCHE", DeviceUi.Muted);
             GUILayout.Label(nearest != null
-                ? $"Vaisseau n°{nearest.Id} : {nearest.StatefulParts.Count()} pièces, {nearest.GetHullParts().Count} éléments de coque (+ les vaisseaux amarrés)"
-                : "Aucun vaisseau à proximité.", DeviceUi.Text);
+                ? $"Vaisseau n°{nearest.Id} : {nearest.StatefulParts.Count()} pièces, {nearest.GetHullParts().Count} éléments de coque (+ les vaisseaux attachés)"
+                : nearestClient != null
+                    ? $"Vaisseau n°{nearestClient.Id} : {nearestClient.StatefulParts.Count()} pièces (+ les vaisseaux attachés)"
+                    : "Aucun vaisseau à proximité.", DeviceUi.Text);
             GUILayout.BeginHorizontal();
             _name = GUILayout.TextField(_name ?? "", TeleportCapsule.MaxNameLength, DeviceUi.Field, GUILayout.Height(34f), GUILayout.ExpandWidth(true));
-            GUI.enabled = nearest != null;
+            GUI.enabled = nearest != null || nearestClient != null;
             if (GUILayout.Button("Copier", DeviceUi.Button, GUILayout.Width(100f), GUILayout.Height(34f)))
             {
                 _message = Run(() => Schematics.Copy(_name));
@@ -537,7 +735,7 @@ namespace StellarDriveDemoTF.Devices
             if (_message != null)
                 GUILayout.Label(_message, DeviceUi.Text);
             GUILayout.FlexibleSpace();
-            GUILayout.Label("Construire est gratuit et place le vaisseau devant toi. Les schématiques sont dans UserData/TF/schematics.", DeviceUi.Muted);
+            GUILayout.Label("Construire est gratuit et place le vaisseau devant toi. Les schématiques sont sur ton PC, dans UserData/TF/schematics.", DeviceUi.Muted);
             if (GUILayout.Button("Fermer (Échap)", DeviceUi.Button, GUILayout.Height(34f)))
                 ModMenu.Close();
             GUILayout.EndArea();
