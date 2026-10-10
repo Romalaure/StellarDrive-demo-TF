@@ -1,10 +1,15 @@
 using System.Collections.Generic;
 using HarmonyLib;
+using Items.Model;
+using Items.Services;
 using Players.Visuals;
+using Rendering.Services;
 using StellarDriveDemoTF.Common;
 using Tools.Interface.Model;
 using Tools.PaintTool;
+using UI.Interface.Model;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 
 namespace StellarDriveDemoTF.Paint
@@ -82,6 +87,48 @@ namespace StellarDriveDemoTF.Paint
             Materials[Part.Chrome] = LitMaterials.Get(ModelName + "_Chrome", new Color(0.86f, 0.87f, 0.9f), 1f, 0.85f);
             Materials[Part.Paint] = LitMaterials.Get(ModelName + "_Paint", DefaultPaint, 0f, 0.8f);
             Materials[Part.Glow] = LitMaterials.Get(ModelName + "_Glow", DefaultPaint, 0f, 0.9f, DefaultPaint * 1.5f);
+        }
+
+        private static readonly Color[] SprayColors =
+        {
+            new Color(0.95f, 0.2f, 0.25f), new Color(1f, 0.8f, 0.15f), new Color(0.25f, 0.85f, 0.4f),
+            new Color(0.2f, 0.7f, 1f), new Color(0.75f, 0.35f, 1f)
+        };
+
+        /// <summary>
+        /// The model shown in the inventory and toolbar: the spray gun with an orange cup, spraying
+        /// a burst of colored drops. Made for one thumbnail render, which destroys it.
+        /// </summary>
+        public static GameObject CreateThumbnailModel()
+        {
+            EnsureAssets();
+            var root = new GameObject(ModelName + "_Thumbnail");
+            foreach (KeyValuePair<Part, Mesh> entry in _meshes)
+                AddRenderer(root, entry.Key.ToString(), entry.Value, new Material(Materials[entry.Key]));
+            // Drops leaving the nozzle, growing as they spread
+            Vector3[] drops =
+            {
+                new Vector3(0f, 0.122f, 0.168f), new Vector3(0.012f, 0.106f, 0.198f), new Vector3(-0.012f, 0.134f, 0.228f),
+                new Vector3(0.008f, 0.1f, 0.258f), new Vector3(-0.004f, 0.142f, 0.282f)
+            };
+            for (int i = 0; i < drops.Length; i++)
+            {
+                float radius = 0.007f + i * 0.0025f;
+                var drop = new MeshBuilder();
+                drop.Cylinder(drops[i] - new Vector3(0f, 0f, radius), drops[i] + new Vector3(0f, 0f, radius), radius * 0.7f, radius * 0.7f, 12);
+                drop.Cylinder(drops[i] - new Vector3(0f, radius * 0.6f, 0f), drops[i] + new Vector3(0f, radius * 0.6f, 0f), radius, radius, 12);
+                Color color = SprayColors[i % SprayColors.Length];
+                AddRenderer(root, "Drop" + i, drop.Build(ModelName + "_Drop" + i), LitMaterials.Get(ModelName + "_Drop" + i, color, 0f, 0.9f, color * 0.8f));
+            }
+            return root;
+        }
+
+        private static void AddRenderer(GameObject root, string name, Mesh mesh, Material material)
+        {
+            var child = new GameObject(name);
+            child.transform.SetParent(root.transform, false);
+            child.AddComponent<MeshFilter>().sharedMesh = mesh;
+            child.AddComponent<MeshRenderer>().sharedMaterial = material;
         }
 
         private static Dictionary<Part, Mesh> BuildMeshes()
@@ -249,6 +296,56 @@ namespace StellarDriveDemoTF.Paint
             ToolVisuals visuals = CurrentTool(__instance);
             if (visuals != null)
                 PaintGunModel.Install(visuals.transform, firstPerson: false);
+        }
+    }
+
+    /// <summary>
+    /// The game draws a tool's inventory icon from its prefab, the demo's placeholder box and can;
+    /// the paint gun gets its own icon instead.
+    /// </summary>
+    [HarmonyPatch(typeof(ItemThumbnailTextureCache), nameof(ItemThumbnailTextureCache.GetThumbnail))]
+    internal static class PaintGunThumbnailPatch
+    {
+        private static readonly AccessTools.FieldRef<ItemThumbnailTextureCache, Dictionary<uint, Texture2D>> Thumbnails =
+            AccessTools.FieldRefAccess<ItemThumbnailTextureCache, Dictionary<uint, Texture2D>>("_thumbnails");
+        private static readonly AccessTools.FieldRef<ItemThumbnailTextureCache, ObjectThumbnailRenderer> Renderer =
+            AccessTools.FieldRefAccess<ItemThumbnailTextureCache, ObjectThumbnailRenderer>("_thumbnailRenderer");
+        private static readonly AccessTools.FieldRef<ItemThumbnailTextureCache, IThumbnailsResolutionProvider> Resolution =
+            AccessTools.FieldRefAccess<ItemThumbnailTextureCache, IThumbnailsResolutionProvider>("_thumbnailsResolutionProvider");
+        private static readonly AccessTools.FieldRef<ItemThumbnailTextureCache, ItemSettingsList> Items =
+            AccessTools.FieldRefAccess<ItemThumbnailTextureCache, ItemSettingsList>("items");
+
+        // Nozzle to the left and a little toward the viewer, top tipped forward to show the cup
+        private static readonly Quaternion Pose = Quaternion.LookRotation(new Vector3(-1f, 0.12f, -0.35f), new Vector3(0f, 1f, -0.25f));
+
+        private static bool Prefix(ItemThumbnailTextureCache __instance, uint itemId, ref Texture2D __result)
+        {
+            Dictionary<uint, Texture2D> thumbnails = Thumbnails(__instance);
+            if (thumbnails == null || thumbnails.ContainsKey(itemId))
+                return true;
+            ItemSettings item = Items(__instance)?.GetItemSettingsById(itemId);
+            if (item == null || item.toolSettings == null || item.toolSettings.prefab == null
+                || item.toolSettings.prefab.GetComponentInChildren<PaintTool>(true) == null)
+                return true;
+            ObjectThumbnailRenderer renderer = Renderer(__instance);
+            IThumbnailsResolutionProvider resolution = Resolution(__instance);
+            if (renderer == null || resolution == null)
+                return true;
+            int size = resolution.GetItemSmallThumbnailResolution();
+            var texture = new Texture2D(size, size, GraphicsFormat.R8G8B8A8_UNorm, TextureCreationFlags.None) { wrapMode = TextureWrapMode.Clamp };
+            try
+            {
+                renderer.Render(PaintGunModel.CreateThumbnailModel(), Pose, texture);
+            }
+            catch (System.Exception e)
+            {
+                TFMod.Log.Warning("paint gun icon not drawn, the game's is used: " + e.Message);
+                Object.Destroy(texture);
+                return true;
+            }
+            thumbnails[itemId] = texture;
+            __result = texture;
+            return false;
         }
     }
 }

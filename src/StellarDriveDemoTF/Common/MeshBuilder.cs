@@ -35,6 +35,19 @@ namespace StellarDriveDemoTF.Common
                 _triangles.Add(start + index);
         }
 
+        /// <summary>Copies another builder's triangles, moved, turned and uniformly scaled by a matrix (no mirroring).</summary>
+        public void Append(MeshBuilder other, Matrix4x4 transform)
+        {
+            int start = _vertices.Count;
+            foreach (Vector3 v in other._vertices)
+                _vertices.Add(transform.MultiplyPoint3x4(v));
+            // Uniform scale only, so the matrix itself turns the normals
+            foreach (Vector3 n in other._normals)
+                _normals.Add(transform.MultiplyVector(n).normalized);
+            foreach (int index in other._triangles)
+                _triangles.Add(start + index);
+        }
+
         /// <summary>Wavefront OBJ text, for previewing models outside the game.</summary>
         public string ToObj()
         {

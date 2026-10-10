@@ -69,8 +69,10 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
     and place them in the gap. The game already lays floor parts flat; each door's frame (read by
     the game for its model, colliders, interaction, preview, magnet and docking joint) is recentred
     on its tiles, and docking doors always face down or up, so ships dock one above the other.
-- **Tool rack** (TF Objets): use it to take a paint gun or a **schematic tablet**, a new
-  inventory item; held in the hand, a left click opens the schematics window.
+- **Tool rack** (TF Objets): a pegboard with a TF header, the paint gun, the schematic tablet
+  and a shelf of paint cans. Use it to take a paint gun or a **schematic tablet**, a new
+  inventory item; held in the hand, a left click opens the schematics window. The paint gun has
+  its own inventory icon (the spray gun with a burst of colored drops).
 - **Ship schematics** (every player, from the schematic tablet): copy the nearest ship, with the
   ships attached to it (docked ships, rotor parts), its cables, TF paint and capsule names, to
   `UserData/TF/schematics` on your own PC, then build it again in front of you, in this world or

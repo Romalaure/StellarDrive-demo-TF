@@ -22,8 +22,8 @@ namespace StellarDriveDemoTF.Devices
     {
         public const ushort RackId = 7175;
 
-        private static readonly Vector3 BoundsCenter = new Vector3(0f, 0.04f, 0f);
-        private static readonly Vector3 BoundsSize = new Vector3(0.9f, 0.08f, 0.6f);
+        private static readonly Vector3 BoundsCenter = new Vector3(0f, 0.06f, 0f);
+        private static readonly Vector3 BoundsSize = new Vector3(0.9f, 0.12f, 0.6f);
 
         public static void Register()
         {
@@ -42,47 +42,135 @@ namespace StellarDriveDemoTF.Devices
             Transform visuals = DeviceModels.Build(settings, prefab, "Râtelier à outils",
                 "Panneau à fixer au mur : regarde-le et appuie sur la touche d'utilisation (T) pour prendre un pistolet à peinture ou une tablette schématique.",
                 4f, new[] { (101u, 2), (110u, 2) }, BoundsCenter, BoundsSize, Shapes(), Materials());
-            UsablePart.AddBox(visuals, BoundsCenter, BoundsSize + new Vector3(0f, 0.25f, 0f));
+            UsablePart.AddBox(visuals, BoundsCenter, BoundsSize + new Vector3(0f, 0.2f, 0f));
             visuals.gameObject.AddComponent<ToolRackVisuals>();
         }
 
+        private static readonly Color Orange = new Color(0.95f, 0.45f, 0.1f);
+
         private static Dictionary<string, DeviceMaterial> Materials() => new Dictionary<string, DeviceMaterial>
         {
-            ["TF_Rack_Board"] = new DeviceMaterial(new Color(0.3f, 0.33f, 0.36f), 0.3f, 0.4f),
-            ["TF_NoPaint_RackMetal"] = new DeviceMaterial(new Color(0.75f, 0.76f, 0.78f), 1f, 0.75f),
-            ["TF_NoPaint_RackGun"] = new DeviceMaterial(new Color(0.95f, 0.45f, 0.1f), 0.2f, 0.6f),
+            ["TF_Rack_Board"] = new DeviceMaterial(new Color(0.24f, 0.27f, 0.3f), 0.2f, 0.35f),
+            ["TF_NoPaint_RackHoles"] = new DeviceMaterial(new Color(0.05f, 0.055f, 0.06f), 0f, 0.1f),
+            ["TF_NoPaint_RackMetal"] = new DeviceMaterial(new Color(0.75f, 0.77f, 0.8f), 1f, 0.8f),
+            ["TF_NoPaint_RackAccent"] = new DeviceMaterial(Orange, 0.2f, 0.55f),
+            ["TF_NoPaint_RackLetters"] = new DeviceMaterial(new Color(1f, 0.97f, 0.9f), 0f, 0.6f, new Color(1f, 0.9f, 0.75f) * 1.5f),
+            ["TF_NoPaint_RackGunBody"] = new DeviceMaterial(new Color(0.72f, 0.75f, 0.79f), 0.55f, 0.55f),
+            ["TF_NoPaint_RackGunDark"] = new DeviceMaterial(new Color(0.11f, 0.115f, 0.125f), 0.1f, 0.3f),
+            ["TF_NoPaint_RackGunPaint"] = new DeviceMaterial(new Color(0.2f, 0.75f, 0.95f), 0.1f, 0.85f),
+            ["TF_NoPaint_RackGunGlow"] = new DeviceMaterial(new Color(0.3f, 0.85f, 1f), 0f, 0.9f, new Color(0.3f, 0.85f, 1f) * 2f),
             ["TF_NoPaint_RackTablet"] = new DeviceMaterial(new Color(0.08f, 0.09f, 0.11f), 0.1f, 0.8f),
-            ["TF_NoPaint_RackScreen"] = new DeviceMaterial(new Color(0.3f, 0.75f, 1f), 0f, 0.9f, new Color(0.25f, 0.65f, 1f) * 2f)
+            ["TF_NoPaint_RackScreen"] = new DeviceMaterial(new Color(0.05f, 0.2f, 0.4f), 0f, 0.9f, new Color(0.08f, 0.3f, 0.6f)),
+            ["TF_NoPaint_RackBlueprint"] = new DeviceMaterial(new Color(0.6f, 0.9f, 1f), 0f, 0.9f, new Color(0.5f, 0.85f, 1f) * 2.2f),
+            ["TF_NoPaint_RackCanRed"] = new DeviceMaterial(new Color(0.85f, 0.12f, 0.1f), 0.3f, 0.7f),
+            ["TF_NoPaint_RackCanYellow"] = new DeviceMaterial(new Color(0.95f, 0.78f, 0.1f), 0.3f, 0.7f),
+            ["TF_NoPaint_RackCanGreen"] = new DeviceMaterial(new Color(0.15f, 0.7f, 0.3f), 0.3f, 0.7f)
         };
 
-        // Lies on its mounting surface (+y out of it); seen on a wall, x is across and z is up
+        // Lies on its mounting surface (+y out of it); seen on a wall, x is across and z is up.
+        // A pegboard in a metal frame with an orange TF header, the paint gun hung on the left, the
+        // schematic tablet in clips on the right and a shelf of paint cans along the bottom.
         internal static Dictionary<string, MeshBuilder> Shapes()
         {
-            var board = new MeshBuilder();
-            var metal = new MeshBuilder();
-            var gun = new MeshBuilder();
-            var tablet = new MeshBuilder();
-            var screen = new MeshBuilder();
-            board.Box(new Vector3(0f, 0.01f, 0f), new Vector3(0.9f, 0.02f, 0.6f));
-            // Hooks
-            foreach (float x in new[] { -0.3f, -0.15f, 0.1f, 0.3f })
-                metal.Cylinder(new Vector3(x, 0.02f, 0.12f), new Vector3(x, 0.07f, 0.12f), 0.006f, 0.006f, 6);
-            // Paint gun on the left: body, nozzle, cup and grip
-            gun.Box(new Vector3(-0.22f, 0.06f, 0.05f), new Vector3(0.2f, 0.05f, 0.06f));
-            metal.Cylinder(new Vector3(-0.32f, 0.06f, 0.05f), new Vector3(-0.38f, 0.06f, 0.05f), 0.012f, 0.006f, 8);
-            gun.Cylinder(new Vector3(-0.2f, 0.06f, 0.08f), new Vector3(-0.2f, 0.06f, 0.17f), 0.035f, 0.03f, 12);
-            gun.Box(new Vector3(-0.16f, 0.055f, -0.03f), new Vector3(0.035f, 0.04f, 0.12f));
-            // Tablet on the right
-            tablet.Box(new Vector3(0.2f, 0.035f, 0f), new Vector3(0.26f, 0.015f, 0.36f));
-            screen.Box(new Vector3(0.2f, 0.044f, 0.005f), new Vector3(0.22f, 0.004f, 0.3f));
-            return new Dictionary<string, MeshBuilder>
+            var shapes = new Dictionary<string, MeshBuilder>();
+            MeshBuilder Of(string name)
             {
-                ["TF_Rack_Board"] = board,
-                ["TF_NoPaint_RackMetal"] = metal,
-                ["TF_NoPaint_RackGun"] = gun,
-                ["TF_NoPaint_RackTablet"] = tablet,
-                ["TF_NoPaint_RackScreen"] = screen
-            };
+                if (!shapes.TryGetValue(name, out MeshBuilder builder))
+                    shapes[name] = builder = new MeshBuilder();
+                return builder;
+            }
+            MeshBuilder board = Of("TF_Rack_Board"), holes = Of("TF_NoPaint_RackHoles"), metal = Of("TF_NoPaint_RackMetal");
+            MeshBuilder accent = Of("TF_NoPaint_RackAccent"), letters = Of("TF_NoPaint_RackLetters");
+
+            // Board, metal frame and corner screws
+            board.Box(new Vector3(0f, 0.01f, 0f), new Vector3(0.88f, 0.02f, 0.58f));
+            metal.Box(new Vector3(0f, 0.015f, 0.29f), new Vector3(0.9f, 0.03f, 0.02f));
+            metal.Box(new Vector3(0f, 0.015f, -0.29f), new Vector3(0.9f, 0.03f, 0.02f));
+            metal.Box(new Vector3(0.44f, 0.015f, 0f), new Vector3(0.02f, 0.03f, 0.56f));
+            metal.Box(new Vector3(-0.44f, 0.015f, 0f), new Vector3(0.02f, 0.03f, 0.56f));
+
+            // Pegboard holes below the header
+            for (int ix = 0; ix < 13; ix++)
+            {
+                for (int iz = 0; iz < 7; iz++)
+                    holes.Box(new Vector3(-0.39f + ix * 0.065f, 0.0205f, -0.255f + iz * 0.065f), new Vector3(0.012f, 0.002f, 0.012f));
+            }
+
+            // Header: orange band with "TF" and two screws
+            accent.Box(new Vector3(0f, 0.025f, 0.245f), new Vector3(0.86f, 0.012f, 0.07f));
+            float ly = 0.0325f;
+            // T
+            letters.Box(new Vector3(-0.355f, ly, 0.262f), new Vector3(0.04f, 0.004f, 0.01f));
+            letters.Box(new Vector3(-0.355f, ly, 0.24f), new Vector3(0.01f, 0.004f, 0.044f));
+            // F
+            letters.Box(new Vector3(-0.31f, ly, 0.245f), new Vector3(0.01f, 0.004f, 0.044f));
+            letters.Box(new Vector3(-0.292f, ly, 0.262f), new Vector3(0.036f, 0.004f, 0.01f));
+            letters.Box(new Vector3(-0.297f, ly, 0.244f), new Vector3(0.026f, 0.004f, 0.009f));
+            // Small white line after the letters, like a label strip
+            letters.Box(new Vector3(0.05f, ly, 0.245f), new Vector3(0.5f, 0.003f, 0.006f));
+            foreach (float x in new[] { -0.41f, 0.41f })
+                metal.Cylinder(new Vector3(x, 0.03f, 0.245f), new Vector3(x, 0.036f, 0.245f), 0.009f, 0.009f, 10);
+
+            // Paint gun hung on its side, nozzle to the left, gauge facing out
+            // (gun x -> out of the wall reversed, gun y -> up the wall, gun z -> left), scaled 1.05
+            var gunMatrix = new Matrix4x4(new Vector4(0f, -1.05f, 0f, 0f), new Vector4(0f, 0f, 1.05f, 0f),
+                new Vector4(-1.05f, 0f, 0f, 0f), new Vector4(-0.21f, 0.068f, -0.03f, 1f));
+            foreach (KeyValuePair<Paint.PaintGunModel.Part, MeshBuilder> part in Paint.PaintGunModel.BuildShapes())
+            {
+                string key;
+                switch (part.Key)
+                {
+                    case Paint.PaintGunModel.Part.Body: key = "TF_NoPaint_RackGunBody"; break;
+                    case Paint.PaintGunModel.Part.Dark: key = "TF_NoPaint_RackGunDark"; break;
+                    case Paint.PaintGunModel.Part.Accent: key = "TF_NoPaint_RackAccent"; break;
+                    case Paint.PaintGunModel.Part.Chrome: key = "TF_NoPaint_RackMetal"; break;
+                    case Paint.PaintGunModel.Part.Paint: key = "TF_NoPaint_RackGunPaint"; break;
+                    default: key = "TF_NoPaint_RackGunGlow"; break;
+                }
+                Of(key).Append(part.Value, gunMatrix);
+            }
+            // Two pegs holding it, under the barrel and the handle
+            foreach (Vector3 peg in new[] { new Vector3(-0.27f, 0f, 0.045f), new Vector3(-0.16f, 0f, -0.145f) })
+                metal.Cylinder(new Vector3(peg.x, 0.02f, peg.z), new Vector3(peg.x, 0.1f, peg.z), 0.006f, 0.006f, 8);
+
+            // Schematic tablet in three clips, a ship blueprint glowing on its screen
+            MeshBuilder tablet = Of("TF_NoPaint_RackTablet"), screen = Of("TF_NoPaint_RackScreen"), blueprint = Of("TF_NoPaint_RackBlueprint");
+            const float tx = 0.23f, tz = 0.02f, ty = 0.04f;
+            tablet.Box(new Vector3(tx, ty, tz), new Vector3(0.26f, 0.016f, 0.34f));
+            screen.Box(new Vector3(tx, ty + 0.0085f, tz + 0.005f), new Vector3(0.226f, 0.002f, 0.29f));
+            float by = ty + 0.0105f;
+            // Hull outline: nose, two sides, stern
+            blueprint.Box(new Vector3(tx, by, tz + 0.1f), new Vector3(0.05f, 0.002f, 0.005f));
+            // Bow lines, turned 30 degrees about the screen normal
+            const float cos = 0.866f, sin = 0.5f;
+            blueprint.Box(new Vector3(tx - 0.045f, by, tz + 0.075f), new Vector3(0.005f, 0.002f, 0.05f), new Vector3(cos, 0f, -sin), Vector3.up, new Vector3(sin, 0f, cos));
+            blueprint.Box(new Vector3(tx + 0.045f, by, tz + 0.075f), new Vector3(0.005f, 0.002f, 0.05f), new Vector3(cos, 0f, sin), Vector3.up, new Vector3(-sin, 0f, cos));
+            blueprint.Box(new Vector3(tx - 0.058f, by, tz - 0.01f), new Vector3(0.005f, 0.002f, 0.13f));
+            blueprint.Box(new Vector3(tx + 0.058f, by, tz - 0.01f), new Vector3(0.005f, 0.002f, 0.13f));
+            blueprint.Box(new Vector3(tx, by, tz - 0.075f), new Vector3(0.12f, 0.002f, 0.005f));
+            // Wings, engines and a grid line across the screen
+            blueprint.Box(new Vector3(tx - 0.08f, by, tz - 0.03f), new Vector3(0.045f, 0.002f, 0.005f));
+            blueprint.Box(new Vector3(tx + 0.08f, by, tz - 0.03f), new Vector3(0.045f, 0.002f, 0.005f));
+            blueprint.Box(new Vector3(tx - 0.03f, by, tz - 0.09f), new Vector3(0.02f, 0.002f, 0.025f));
+            blueprint.Box(new Vector3(tx + 0.03f, by, tz - 0.09f), new Vector3(0.02f, 0.002f, 0.025f));
+            blueprint.Box(new Vector3(tx, by, tz + 0.03f), new Vector3(0.09f, 0.002f, 0.002f));
+            blueprint.Box(new Vector3(tx, by, tz - 0.02f), new Vector3(0.002f, 0.002f, 0.17f));
+            // Clips: two under the tablet, one on top
+            metal.Box(new Vector3(tx - 0.08f, 0.04f, tz - 0.178f), new Vector3(0.03f, 0.04f, 0.012f));
+            metal.Box(new Vector3(tx + 0.08f, 0.04f, tz - 0.178f), new Vector3(0.03f, 0.04f, 0.012f));
+            metal.Box(new Vector3(tx, 0.04f, tz + 0.178f), new Vector3(0.05f, 0.04f, 0.012f));
+
+            // Shelf along the bottom with three paint cans
+            metal.Box(new Vector3(0f, 0.055f, -0.262f), new Vector3(0.84f, 0.09f, 0.008f));
+            metal.Box(new Vector3(0f, 0.1f, -0.25f), new Vector3(0.84f, 0.006f, 0.03f));
+            string[] cans = { "TF_NoPaint_RackCanRed", "TF_NoPaint_RackCanYellow", "TF_NoPaint_RackCanGreen" };
+            for (int i = 0; i < cans.Length; i++)
+            {
+                float x = 0.12f + i * 0.09f;
+                Of(cans[i]).Cylinder(new Vector3(x, 0.055f, -0.258f), new Vector3(x, 0.055f, -0.19f), 0.03f, 0.03f, 16);
+                metal.Cylinder(new Vector3(x, 0.055f, -0.19f), new Vector3(x, 0.055f, -0.182f), 0.031f, 0.026f, 16);
+            }
+            return shapes;
         }
 
         public static void RequestTool(uint itemId) => TFNet.SendToServer(TFMessageKind.GiveTool, itemId, 0, "");
@@ -258,13 +346,22 @@ namespace StellarDriveDemoTF.Devices
         }
     }
 
-    /// <summary>Adds the schematic tablet to the game's item list, on every machine with the mod.</summary>
+    /// <summary>Adds the schematic tablet to the game's item list and names the paint gun, on every machine with the mod.</summary>
     [HarmonyPatch(typeof(ItemSettingsList), "ResetDict")]
     internal static class SchematicTabletItemPatch
     {
         private static void Prefix(ref ItemSettings[] ___items)
         {
-            if (___items == null || ___items.Any(i => i != null && i.id == SchematicTablet.ItemId))
+            if (___items == null)
+                return;
+            // The demo calls it "Paint Tool"
+            foreach (ItemSettings item in ___items)
+            {
+                if (item != null && item.toolSettings != null && item.toolSettings.prefab != null
+                    && item.toolSettings.prefab.GetComponentInChildren<Tools.PaintTool.PaintTool>(true) != null)
+                    item.itemName = "Pistolet à peinture";
+            }
+            if (___items.Any(i => i != null && i.id == SchematicTablet.ItemId))
                 return;
             ___items = ___items.Concat(new[] { SchematicTablet.Item }).ToArray();
         }
