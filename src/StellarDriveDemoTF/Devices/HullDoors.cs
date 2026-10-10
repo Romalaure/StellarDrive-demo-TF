@@ -216,35 +216,32 @@ namespace StellarDriveDemoTF.Devices
 
     /// <summary>
     /// Two docked ships are held where their doors meet. The game reads that from the doors'
-    /// placements; for the floor docking doors it is redone from their real frame.
+    /// placements; for the floor docking doors it is redone from their real frame, once the joint
+    /// tree is built (BuildShipGraph must not be patched: its graph is an out parameter that a
+    /// patch reading __args sets back to null, which breaks every rotor and docking joint).
     /// </summary>
-    [HarmonyPatch(typeof(ShipsJointsTreeTracker), "BuildShipGraph")]
+    [HarmonyPatch(typeof(ShipsJointsTreeTracker), "RecurseBuildChild")]
     internal static class HorizontalDockJointPatch
     {
         private static readonly Vector3 Center = new Vector3(0.5f, 0.5f, 0.25f);
 
-        private static void Postfix(object[] __args)
+        private static void Postfix(ShipsJointsTreeTracker __instance, TrackedShipJoint __result)
         {
-            object graph = __args.Length > 1 ? __args[1] : null;
-            if (graph == null)
+            if (__result?.Children == null)
                 return;
-            if (!(Traverse.Create(graph).Property("Nodes").GetValue() is IDictionary nodes))
-                return;
-            var done = new HashSet<DockedJointConnection>();
-            foreach (object node in nodes.Values)
+            IShipsProvider ships = null;
+            foreach (TrackedShipJoint child in __result.Children)
             {
-                if (!(Traverse.Create(node).Property("Connections").GetValue() is IList connections))
+                if (!(child.JointConnection is DockedJointConnection joint))
                     continue;
-                foreach (object connection in connections)
-                {
-                    var traverse = Traverse.Create(connection);
-                    if (!(traverse.Property("Connection").GetValue() is DockedJointConnection joint) || !done.Add(joint))
-                        continue;
-                    var shipA = Traverse.Create(traverse.Property("ShipA").GetValue()).Property("ShipRef").GetValue() as IShipStateRead;
-                    var shipB = Traverse.Create(traverse.Property("ShipB").GetValue()).Property("ShipRef").GetValue() as IShipStateRead;
-                    if (shipA != null && shipB != null)
-                        Fix(joint, shipA, shipB);
-                }
+                ships = ships ?? Traverse.Create(__instance).Field("_ships").GetValue() as IShipsProvider;
+                if (ships == null)
+                    return;
+                // Without reversal the parent is ship A of the connection
+                uint a = joint.IsDirectionReversed ? child.ShipId : __result.ShipId;
+                uint b = joint.IsDirectionReversed ? __result.ShipId : child.ShipId;
+                if (ships.TryGetShip(a, out IShipStateRead shipA) && ships.TryGetShip(b, out IShipStateRead shipB))
+                    Fix(joint, shipA, shipB);
             }
         }
 
