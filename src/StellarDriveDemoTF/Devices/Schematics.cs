@@ -142,11 +142,15 @@ namespace StellarDriveDemoTF.Devices
             // attached ships placed relative to their parent
             var data = new ShipImportExportUtils.ShipImportExportData { rootShipId = ship.Id };
             var snapshots = new Dictionary<uint, ShipStateSnapshot>();
-            foreach (RootRelativeShipData connected in service.GetRootConnectedShips(ship.Id))
+            foreach (TrackedShipServer attached in AttachedShips(ship, service, spaces))
             {
-                var snapshot = (ShipStateSnapshot)((TrackedShipServer)connected.Ship).GetStateSnapshot();
+                var snapshot = (ShipStateSnapshot)attached.GetStateSnapshot();
                 snapshots[snapshot.Id] = snapshot;
             }
+            ShipStateSnapshot rootSnapshot = snapshots[ship.Id];
+            uint rootSpace = rootSnapshot.SpaceId;
+            Vector3 rootPosition = rootSnapshot.Position;
+            Quaternion rootRotation = rootSnapshot.Rotation;
             foreach (uint id in snapshots.Keys.ToList())
             {
                 ShipStateSnapshot snapshot = snapshots[id];
@@ -154,11 +158,22 @@ namespace StellarDriveDemoTF.Devices
                 {
                     snapshot.SpaceId = 0u;
                 }
+                else if (spaces.TryGetSpace(snapshot.SpaceId, out ISpace space) && space is ShipRelativeSpace relative && snapshots.ContainsKey(relative.ShipId))
+                {
+                    snapshot.SpaceId = relative.ShipId;
+                }
+                else if (snapshot.SpaceId == rootSpace)
+                {
+                    // Ships flying beside the root (a rotor's turning part): stored relative to the root
+                    snapshot.Position = Quaternion.Inverse(rootRotation) * (snapshot.Position - rootPosition);
+                    snapshot.Rotation = Quaternion.Inverse(rootRotation) * snapshot.Rotation;
+                    snapshot.SpaceId = data.rootShipId;
+                }
                 else
                 {
-                    if (!spaces.TryGetSpace(snapshot.SpaceId, out ISpace space) || !(space is ShipRelativeSpace relative))
-                        return "Ce vaisseau ne peut pas être copié (vaisseau attaché introuvable).";
-                    snapshot.SpaceId = relative.ShipId;
+                    TFMod.Log.Warning($"schematic: attached ship {id} is in another space, left out");
+                    snapshots.Remove(id);
+                    continue;
                 }
                 snapshots[id] = snapshot;
             }
@@ -216,6 +231,45 @@ namespace StellarDriveDemoTF.Devices
             File.WriteAllText(path, JsonConvert.SerializeObject(file, Formatting.Indented));
             TFMod.Log.Msg($"schematic '{name}' saved: {file.ships} ship(s), {file.parts} part(s) -> {path}");
             return $"« {name} » enregistrée : {file.ships} vaisseau(x), {file.parts} pièces.";
+        }
+
+        /// <summary>
+        /// The ship and everything attached to it: docked ships, the turning parts of its rotors
+        /// (separate ships held by the rotor) and ships inside its space, then the same for every
+        /// ship found.
+        /// </summary>
+        private static List<TrackedShipServer> AttachedShips(TrackedShipServer root, ShipsServerTracker ships, SpacesServer spaces)
+        {
+            var found = new Dictionary<uint, TrackedShipServer>();
+            var queue = new Queue<TrackedShipServer>();
+            void Add(uint id)
+            {
+                if (!found.ContainsKey(id) && ships.TryGetTrackedShip(id, out TrackedShipServer attached))
+                {
+                    found[id] = attached;
+                    queue.Enqueue(attached);
+                }
+            }
+            Add(root.Id);
+            foreach (RootRelativeShipData connected in ships.GetRootConnectedShips(root.Id))
+                Add(connected.Ship.Id);
+            while (queue.Count > 0)
+            {
+                TrackedShipServer current = queue.Dequeue();
+                foreach (StatefulPart part in current.StatefulParts)
+                {
+                    if (part.State is RotorState rotor && rotor.AnchoredShipId != 0)
+                        Add(rotor.AnchoredShipId);
+                    else if (part.State is DockingDoorState door && door.IsDocked)
+                        Add(door.DockedConnectedPart.ShipId);
+                }
+                foreach (TrackedShipServer other in ships.Ships)
+                {
+                    if (spaces.TryGetSpace(other.SpaceId, out ISpace space) && space is ShipRelativeSpace relative && relative.ShipId == current.Id)
+                        Add(other.Id);
+                }
+            }
+            return found.Values.ToList();
         }
 
         /// <summary>Builds a saved schematic in front of the player. Returns a message for the player.</summary>
@@ -280,23 +334,41 @@ namespace StellarDriveDemoTF.Devices
                 cables[i] = cable;
             }
             float extent = 4f;
+            var droppedParts = new HashSet<(uint, ushort)>();
             foreach (SavedShipState state in states)
             {
                 if (oldIds[state.Id] != rootId)
                     state.SpaceId = newIds[state.SpaceId];
+                var kept = new List<StatefulPart>();
                 foreach (StatefulPart part in state.StatefulParts)
                 {
-                    if (part.State is RotorState rotor && newIds.TryGetValue(rotor.AnchoredShipId, out uint anchored))
+                    if (part.State is RotorState rotor)
                     {
+                        // A rotor whose turning part is not in the schematic (saved by an older
+                        // version) would grab the original ship's turning part: leave it out
+                        if (!newIds.TryGetValue(rotor.AnchoredShipId, out uint anchored))
+                        {
+                            droppedParts.Add((state.Id, part.Id));
+                            continue;
+                        }
                         part.State = rotor with { AnchoredShipId = anchored };
                     }
-                    else if (part.State is DockingDoorState door && newIds.TryGetValue(door.DockedConnectedPart.ShipId, out uint docked))
+                    else if (part.State is DockingDoorState door && door.IsDocked)
                     {
-                        PartContext connected = door.DockedConnectedPart;
-                        connected.ShipId = docked;
-                        part.State = door with { DockedConnectedPart = connected };
+                        if (newIds.TryGetValue(door.DockedConnectedPart.ShipId, out uint docked))
+                        {
+                            PartContext connected = door.DockedConnectedPart;
+                            connected.ShipId = docked;
+                            part.State = door with { DockedConnectedPart = connected };
+                        }
+                        else
+                        {
+                            part.State = door with { IsDocked = false };
+                        }
                     }
+                    kept.Add(part);
                 }
+                state.StatefulParts = kept.ToArray();
                 if (oldIds[state.Id] == rootId)
                 {
                     foreach (HullPart hull in state.HullParts)
@@ -330,8 +402,15 @@ namespace StellarDriveDemoTF.Devices
             if (cablesTracker != null)
             {
                 foreach (CableData cable in cables)
+                {
+                    EntityPartSocket a = cable.State.PlugA.EntityPartSocket, b = cable.State.PlugB.EntityPartSocket;
+                    if (droppedParts.Contains((a.EntityId, a.Socket.PartId)) || droppedParts.Contains((b.EntityId, b.Socket.PartId)))
+                        continue;
                     cablesTracker.AddCable(cable.State);
+                }
             }
+            if (droppedParts.Count > 0)
+                TFMod.Log.Warning($"schematic '{file.name}': {droppedParts.Count} rotor(s) left out, their turning part was not saved; copy the ship again");
 
             // TF extras follow the ships to their new ids
             foreach (SavedPaint paint in file.paint ?? new List<SavedPaint>())

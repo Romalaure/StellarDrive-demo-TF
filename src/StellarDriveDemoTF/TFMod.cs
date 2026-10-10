@@ -114,6 +114,7 @@ namespace StellarDriveDemoTF
             Devices.RadioSound.Update();
             Devices.ThirdPerson.Update();
             Devices.SchematicTablet.Update();
+            Devices.RotorCheck.Update();
         }
 
         public override void OnLateUpdate()
@@ -132,6 +133,7 @@ namespace StellarDriveDemoTF
             Devices.SchematicsMenu.Draw();
             Devices.ToolRackMenu.Draw();
             Devices.SchematicTablet.Draw();
+            Devices.RotorCheck.Draw();
         }
     }
 }
