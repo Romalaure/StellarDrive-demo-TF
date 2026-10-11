@@ -31,8 +31,8 @@ using WorldTracking.Spaces;
 namespace StellarDriveDemoTF.Devices
 {
     /// <summary>
-    /// Ship schematics, opened from the schematic tablet item: copy the nearest ship (with everything docked to it, its cables, TF paint
-    /// and capsule names) to a file in UserData/TF/schematics, and build it again later, in this
+    /// Ship schematics, opened from the schematic tablet item: copy the nearest ship (with everything docked to it, its cables, TF paint,
+    /// capsule names and KeySeat seat keys) to a file in UserData/TF/schematics, and build it again later, in this
     /// world or another, in front of you. Built on the game's own (developer) ship export and
     /// import. Every player can use them: the host does the copy and the build in its world, and
     /// the files are kept on the PC of the player who copied, sent over the network in pieces.
@@ -54,6 +54,7 @@ namespace StellarDriveDemoTF.Devices
             public string game;
             public List<SavedPaint> paint = new List<SavedPaint>();
             public List<SavedName> capsules = new List<SavedName>();
+            public List<SavedName> seatKeys = new List<SavedName>();
         }
 
         private sealed class SavedPaint
@@ -245,6 +246,10 @@ namespace StellarDriveDemoTF.Devices
                 if (snapshots.ContainsKey(capsule.Key.ShipId))
                     file.capsules.Add(new SavedName { ship = capsule.Key.ShipId, part = capsule.Key.PartId, name = capsule.Value });
             }
+
+            // KeySeat command seats: their custom keys (name holds KeySeat's own encoding)
+            foreach ((uint seatShip, ushort seatPart, string keys) in KeySeatCompat.Export(snapshots.Keys))
+                file.seatKeys.Add(new SavedName { ship = seatShip, part = seatPart, name = keys });
 
             return $"« {name} » enregistrée : {file.ships} vaisseau(x), {file.parts} pièces.";
         }
@@ -457,6 +462,11 @@ namespace StellarDriveDemoTF.Devices
             {
                 if (newIds.TryGetValue(capsule.ship, out uint ship))
                     TFNet.SendToServer(TFMessageKind.CapsuleName, ship, capsule.part, capsule.name);
+            }
+            foreach (SavedName seat in file.seatKeys ?? new List<SavedName>())
+            {
+                if (newIds.TryGetValue(seat.ship, out uint ship))
+                    KeySeatCompat.Import(ship, seat.part, seat.name);
             }
             TFMod.Log.Msg($"schematic '{file.name}' built: {states.Length} ship(s)");
             return $"« {file.name} » construite devant toi.";

@@ -75,10 +75,15 @@ MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](
   laser); the schematic tablet, held in the hand, a left click opens the schematics window. The paint gun has
   its own inventory icon (the spray gun with a burst of colored drops).
 - **Ship schematics** (every player, from the schematic tablet): copy the nearest ship, with the
-  ships attached to it (docked ships, rotor parts), its cables, TF paint and capsule names, to
+  ships attached to it (docked ships, rotor parts), its cables, TF paint, capsule names and the
+  custom keys of [KeySeat](https://github.com/tidic84) command seats, to
   `UserData/TF/schematics` on your own PC, then build it again in front of you, in this world or
   another. The host does the copy and the build; other players' files travel over the network.
   Uses the game's own developer ship export/import; building is free.
+- **KeySeat / CustomSeat compatibility** (optional, read by reflection): a command seat's custom
+  keys are written to the world's `keyseat.txt` as soon as they change, instead of only when the
+  game is saved, and ship schematics carry them to the built copy. If KeySeat is installed twice
+  (CustomSeat.dll and KeySeat.dll), the log warns: keep only one.
 - **Third person in flight**: from the pilot seat, **V** (`ThirdPersonKey`) moves the view
   behind the ship, following where you look; the mouse wheel sets the distance
   (`ThirdPersonDistance`).

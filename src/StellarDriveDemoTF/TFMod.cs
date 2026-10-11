@@ -6,7 +6,7 @@ using StellarDriveDemoTF;
 using StellarDriveDemoTF.Common;
 using StellarDriveDemoTF.Paint;
 
-[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.13.0", "Romalaure")]
+[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.14.0", "Romalaure")]
 [assembly: MelonGame("CuriousOwlGames", "StellarDrive")]
 [assembly: MelonOptionalDependencies("SDModKit")]
 [assembly: HarmonyDontPatchAll]
@@ -101,6 +101,7 @@ namespace StellarDriveDemoTF
         {
             GameServices.Invalidate();
             ModMenu.Reset();
+            Devices.KeySeatCompat.Reset();
         }
 
         public override void OnUpdate()
@@ -116,6 +117,7 @@ namespace StellarDriveDemoTF
             Devices.ThirdPerson.Update();
             Devices.SchematicTablet.Update();
             Devices.RotorCheck.Update();
+            Devices.KeySeatCompat.Update();
         }
 
         public override void OnLateUpdate()
