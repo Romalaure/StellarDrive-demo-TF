@@ -6,7 +6,7 @@ using StellarDriveDemoTF;
 using StellarDriveDemoTF.Common;
 using StellarDriveDemoTF.Paint;
 
-[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.12.0", "Romalaure")]
+[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.13.0", "Romalaure")]
 [assembly: MelonGame("CuriousOwlGames", "StellarDrive")]
 [assembly: MelonOptionalDependencies("SDModKit")]
 [assembly: HarmonyDontPatchAll]
@@ -82,7 +82,7 @@ namespace StellarDriveDemoTF
             Try("the radio", Devices.Radio.Register);
             Try("the wardrobe", Devices.Wardrobe.Register);
             Try("the tool rack", Devices.ToolRack.Register);
-            Try("trapdoors and horizontal docking doors", Devices.HullDoors.Register);
+            Try("horizontal docking doors", Devices.HullDoors.Register);
         }
 
         private static void Try(string what, Action register)

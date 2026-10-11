@@ -16,11 +16,15 @@ namespace StellarDriveDemoTF.Devices
 {
     /// <summary>
     /// The tool rack: a wall panel holding a paint gun and a schematic tablet. Look at it and press
-    /// the use key to take either one as an item in your inventory (one of each per player).
+    /// the use key to take one of them, or one of the game's base tools if it was lost, as an item
+    /// in your inventory (one of each per player).
     /// </summary>
     internal static class ToolRack
     {
         public const ushort RackId = 7175;
+
+        /// <summary>The tools every player starts with (the game's default toolbar).</summary>
+        public static readonly uint[] BaseTools = { 0u, 1u, 2u };
 
         private static readonly Vector3 BoundsCenter = new Vector3(0f, 0.06f, 0f);
         private static readonly Vector3 BoundsSize = new Vector3(0.9f, 0.12f, 0.6f);
@@ -40,7 +44,7 @@ namespace StellarDriveDemoTF.Devices
         private static void Configure(PartSettings settings, GameObject prefab)
         {
             Transform visuals = DeviceModels.Build(settings, prefab, "Râtelier à outils",
-                "Panneau à fixer au mur : regarde-le et appuie sur la touche d'utilisation (T) pour prendre un pistolet à peinture ou une tablette schématique.",
+                "Panneau à fixer au mur : regarde-le et appuie sur la touche d'utilisation (T) pour prendre un pistolet à peinture, une tablette schématique ou un outil de base perdu.",
                 4f, new[] { (101u, 2), (110u, 2) }, BoundsCenter, BoundsSize, Shapes(), Materials());
             UsablePart.AddBox(visuals, BoundsCenter, BoundsSize + new Vector3(0f, 0.2f, 0f));
             visuals.gameObject.AddComponent<ToolRackVisuals>();
@@ -179,12 +183,12 @@ namespace StellarDriveDemoTF.Devices
         {
             if (sender == null)
                 return;
-            if (itemId == SchematicTablet.ItemId)
+            if (itemId == SchematicTablet.ItemId || System.Array.IndexOf(BaseTools, itemId) >= 0)
             {
                 TrackedPlayerServer player = GameServices.PlayersServer?.GetTrackedPlayerFromConnectionId(sender.ClientId);
                 if (player == null)
                     return;
-                var drop = new ItemDrop { ItemId = SchematicTablet.ItemId, Quantity = 1 };
+                var drop = new ItemDrop { ItemId = itemId, Quantity = 1 };
                 if (!player.HasItemsInInventory(new[] { drop }))
                     player.AddItemToInventory(drop);
             }
@@ -219,7 +223,7 @@ namespace StellarDriveDemoTF.Devices
             float scale = Mathf.Clamp(Screen.height / 1080f, 0.7f, 2.5f);
             Matrix4x4 previous = GUI.matrix;
             GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
-            Rect area = DeviceUi.Window(Screen.width / scale, Screen.height / scale, 480f, 330f, "RÂTELIER À OUTILS");
+            Rect area = DeviceUi.Window(Screen.width / scale, Screen.height / scale, 480f, 520f, "RÂTELIER À OUTILS");
             GUILayout.BeginArea(area);
             GUILayout.Label("Prends un outil : il va dans ton inventaire (un de chaque par joueur).", DeviceUi.Text);
             GUILayout.Space(10f);
@@ -234,11 +238,38 @@ namespace StellarDriveDemoTF.Devices
                 ToolRack.RequestTool(SchematicTablet.ItemId);
                 ModMenu.Close();
             }
+            GUILayout.Space(12f);
+            GUILayout.Label("Outils de base (si tu les as perdus) :", DeviceUi.Text);
+            GUILayout.Space(4f);
+            foreach (uint tool in ToolRack.BaseTools)
+            {
+                if (GUILayout.Button(ToolName(tool), DeviceUi.Button, GUILayout.Height(40f)))
+                {
+                    ToolRack.RequestTool(tool);
+                    ModMenu.Close();
+                }
+                GUILayout.Space(4f);
+            }
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Fermer (Échap)", DeviceUi.Button, GUILayout.Height(34f)))
                 ModMenu.Close();
             GUILayout.EndArea();
             GUI.matrix = previous;
+        }
+
+        private static readonly Dictionary<uint, string> Names = new Dictionary<uint, string>();
+
+        // The game's own item name (build tool, recycler, mining laser)
+        private static string ToolName(uint itemId)
+        {
+            if (!Names.TryGetValue(itemId, out string name))
+            {
+                name = Resources.FindObjectsOfTypeAll<ItemSettings>().FirstOrDefault(i => i != null && i.id == itemId)?.itemName;
+                if (string.IsNullOrEmpty(name))
+                    return "Outil " + itemId;
+                Names[itemId] = name;
+            }
+            return name;
         }
     }
 

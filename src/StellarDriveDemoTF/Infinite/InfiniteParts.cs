@@ -14,6 +14,7 @@ using Ships.Interface.Model.Parts.State;
 using Ships.Interface.Model.Parts.StateTypes;
 using Ships.Interface.Settings;
 using Ships.Parts.WoodPowerGenerator;
+using Ships.Physics;
 using StellarDriveDemoTF.Common;
 using StellarDriveDemoTF.Lights;
 using UnityEngine;
@@ -43,6 +44,9 @@ namespace StellarDriveDemoTF.Infinite
         /// <summary>What each slot of the resource chest holds; the last slot is a bin that deletes what goes in.</summary>
         public static readonly uint[] ChestItems = { 101, 102, 112, 104, 110, 109, 100, 105, 103 };
         public const byte ChestStack = 20;
+
+        /// <summary>Mass of every infinite part; what they hold is not counted (see InfiniteMassPatch).</summary>
+        public const float Mass = 0.01f;
 
         private static readonly HashSet<ushort> Ids = new HashSet<ushort> { Generator, OxygenTank, EthanolTank, ResourceChest };
 
@@ -84,6 +88,7 @@ namespace StellarDriveDemoTF.Infinite
                     settings.description = description;
                     settings.localizedDescription = null;
                     LampParts.SetCost(settings, cost);
+                    settings.mass = Mass;
                     Tint(prefab, tint);
                 }
             });
@@ -178,6 +183,21 @@ namespace StellarDriveDemoTF.Infinite
             {
                 __result = InfiniteParts.Refilled(__result);
             }
+        }
+    }
+
+    /// <summary>
+    /// The ship counts the items in a chest and the fluid in a tank as mass: full stacks of iron
+    /// and full tanks made a ship carrying infinite parts very heavy. Their contents weigh nothing.
+    /// </summary>
+    [HarmonyPatch(typeof(StatefulPartsMassTracker), "EnsureMassChangeIsAccounted")]
+    internal static class InfiniteMassPatch
+    {
+        private static void Prefix(StatefulPart part, ref IStatefulPartState state)
+        {
+            // Only the mass sum reads this state: without it the part weighs its settings' mass
+            if (part?.Settings != null && InfiniteParts.IsInfinite(part.Settings.id))
+                state = null;
         }
     }
 

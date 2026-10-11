@@ -16,7 +16,7 @@ namespace StellarDriveDemoTF.Common
         public const int LampsRow = 0;
         public const int ChairsRow = 2;
 
-        // "TF Objets": camera and devices, infinite parts, floor doors
+        // "TF Objets": camera and devices, infinite parts, floor docking doors
         public const int DevicesRow = 0;
         public const int CamerasRow = DevicesRow;
         public const int InfiniteRow = 1;

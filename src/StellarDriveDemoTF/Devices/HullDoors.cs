@@ -22,9 +22,8 @@ using UnityEngine;
 namespace StellarDriveDemoTF.Devices
 {
     /// <summary>
-    /// Doors laid in the floor: trapdoors (the game's door, 2x2 or shrunk to 1x1) and horizontal
-    /// docking doors (the game's docking door, docking downward or upward). They are the game's
-    /// own parts, cloned and set to snap like floor tiles, so opening, closing, saving and syncing
+    /// Docking doors laid in the floor (the game's docking door, docking downward or upward).
+    /// They are the game's own part, cloned and set to snap like floor tiles, so opening, closing, saving and syncing
     /// stay the game's.
     ///
     /// The game already lays floor parts flat (their forward axis is vertical), but a door's model
@@ -36,35 +35,26 @@ namespace StellarDriveDemoTF.Devices
     /// </summary>
     internal static class HullDoors
     {
-        public const ushort Trapdoor2 = 7181;
-        public const ushort Trapdoor1 = 7182;
+        // 7181 and 7182 were trapdoors, removed: the game skips them in saves
         public const ushort DockDown = 7183;
         public const ushort DockUp = 7184;
 
         private static readonly Vector3 Corner2 = new Vector3(0.5f, 0.5f, 0f);
 
-        public static bool IsFloorDoor(ushort id) => id >= Trapdoor2 && id <= DockUp;
+        public static bool IsFloorDoor(ushort id) => id == DockDown || id == DockUp;
 
         public static bool IsDock(ushort id) => id == DockDown || id == DockUp;
 
         public static void Register()
         {
-            Add(Trapdoor2, "Door", "Trappe 2×2",
-                "Porte posée dans le sol, sur 2×2 cases : retire 4 dalles de sol et pose la trappe à leur place. S'ouvre et se ferme comme une porte.",
-                2);
-            Add(Trapdoor1, "Door", "Trappe 1×1",
-                "Petite porte posée dans le sol, sur une seule case : retire une dalle de sol et pose la trappe à sa place. S'ouvre et se ferme comme une porte.",
-                1);
             Add(DockDown, "DockingDoor", "Porte d'amarrage (sol, vers le bas)",
-                "Porte d'amarrage posée dans le sol, sur 2×2 cases, qui s'amarre vers le BAS : sous un vaisseau, elle accroche une porte d'amarrage tournée vers le haut. Mêmes fonctions que la porte d'amarrage du jeu.",
-                2);
+                "Porte d'amarrage posée dans le sol, sur 2×2 cases, qui s'amarre vers le BAS : sous un vaisseau, elle accroche une porte d'amarrage tournée vers le haut. Mêmes fonctions que la porte d'amarrage du jeu.");
             Add(DockUp, "DockingDoor", "Porte d'amarrage (sol, vers le haut)",
-                "Porte d'amarrage posée dans le sol, sur 2×2 cases, qui s'amarre vers le HAUT : sur le toit d'un vaisseau ou d'une base, elle accroche une porte d'amarrage tournée vers le bas. Mêmes fonctions que la porte d'amarrage du jeu.",
-                2);
-            TFMod.Log.Msg("registered trapdoors and horizontal docking doors");
+                "Porte d'amarrage posée dans le sol, sur 2×2 cases, qui s'amarre vers le HAUT : sur le toit d'un vaisseau ou d'une base, elle accroche une porte d'amarrage tournée vers le bas. Mêmes fonctions que la porte d'amarrage du jeu.");
+            TFMod.Log.Msg("registered horizontal docking doors");
         }
 
-        private static void Add(ushort id, string donor, string label, string description, int tiles)
+        private static void Add(ushort id, string donor, string label, string description)
         {
             CustomParts.Register(new CustomPartDefinition
             {
@@ -73,17 +63,17 @@ namespace StellarDriveDemoTF.Devices
                 Donor = donor,
                 BuildTab = TFTab.ObjectsName,
                 BuildRow = TFTab.DoorsRow,
-                Configure = (settings, prefab) => Configure(settings, prefab, label, description, tiles)
+                Configure = (settings, prefab) => Configure(settings, prefab, label, description)
             });
         }
 
-        private static void Configure(PartSettings settings, GameObject prefab, string label, string description, int tiles)
+        private static void Configure(PartSettings settings, GameObject prefab, string label, string description)
         {
             settings.fullLabel = label;
             settings.description = description;
             settings.localizedDescription = null;
             settings.snappingStyle = SnappingStyle.Floor;
-            settings.size = new Vector3(tiles, 1f, tiles);
+            settings.size = new Vector3(2f, 1f, 2f);
             if (settings is HullPartSettings hull)
             {
                 hull.defaultForward = PartOrientation.Down;
@@ -91,20 +81,12 @@ namespace StellarDriveDemoTF.Devices
                 hull.pivotedSettings = null;
             }
 
-            float scale = tiles == 1 ? 0.5f : 1f;
-            if (tiles == 1)
-            {
-                settings.mass *= 0.3f;
-                // The model, its colliders and its interaction box all shrink to one tile
-                foreach (Transform child in prefab.transform.Cast<Transform>().ToList())
-                    child.localScale = Vector3.Scale(child.localScale, new Vector3(0.5f, 0.5f, 1f));
-            }
             // A thin box over the door's own area, so it never overlaps the walls around the hole
             var bounds = prefab.GetComponent<ShipPartBounds>();
             if (bounds != null)
             {
-                bounds.center = Corner2 * scale;
-                bounds.bounds = new Vector3(1.9f * scale, 1.9f * scale, 0.1f);
+                bounds.center = Corner2;
+                bounds.bounds = new Vector3(1.9f, 1.9f, 0.1f);
             }
         }
 
@@ -121,11 +103,8 @@ namespace StellarDriveDemoTF.Devices
             else if (id == DockUp)
                 forward = Vector3.up;
             rotation = Quaternion.LookRotation(forward, up);
-            // Content centre (its corner tile grown by 2x2, or a shrunk 1x1) onto the tiles' centre
-            bool single = id == Trapdoor1;
-            Vector3 contentCenter = single ? Corner2 * 0.5f : Corner2;
-            Vector3 tilesCenter = single ? Vector3.zero : new Vector3(0.5f, 0f, 0.5f);
-            shift = tilesCenter - rotation * contentCenter;
+            // Content centre (its corner tile grown by 2x2) onto the tiles' centre
+            shift = new Vector3(0.5f, 0f, 0.5f) - rotation * Corner2;
         }
 
         public static bool TryFrame(StatefulPart part, out Quaternion rotation, out Vector3 position)
