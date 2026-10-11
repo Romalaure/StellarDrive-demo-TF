@@ -156,8 +156,11 @@ namespace StellarDriveDemoTF.Paint
         /// <summary>A part was removed from its ship; forget its paint on whichever side this runs.</summary>
         public static void ForgetPart(PartKey key)
         {
-            Server.Remove(key);
-            Client.Remove(key);
+            foreach (PartKey side in new[] { key.Exterior, key.Interior })
+            {
+                Server.Remove(side);
+                Client.Remove(side);
+            }
         }
 
         private static void EnsureHandlers()
@@ -227,10 +230,9 @@ namespace StellarDriveDemoTF.Paint
             var ships = GameServices.ShipsServer;
             if (ships == null || !ships.TryGetShip(request.ShipId, out IShipStateRead ship))
                 return;
-            if (!ship.TryGetStatefulPart(request.PartId, out _))
-                return;
-
             var target = new PartKey(request.ShipId, request.PartId);
+            if (!ship.TryGetStatefulPart(target.RealPartId, out _))
+                return;
             List<PartKey> toPaint;
             if (request.ReplaceSame)
             {
@@ -238,7 +240,7 @@ namespace StellarDriveDemoTF.Paint
                 // with the clicked part's paint (or every unpainted part, if it is unpainted)
                 bool targetPainted = Server.TryGet(target, out PaintData targetPaint);
                 toPaint = ship.StatefulParts
-                    .Select(p => new PartKey(request.ShipId, p.Id))
+                    .Select(p => target.IsInterior ? new PartKey(request.ShipId, p.Id).Interior : new PartKey(request.ShipId, p.Id))
                     .Where(k => Server.TryGet(k, out PaintData p) ? targetPainted && p.SameAs(targetPaint) : !targetPainted)
                     .ToList();
             }

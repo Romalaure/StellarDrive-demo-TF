@@ -60,13 +60,26 @@ namespace StellarDriveDemoTF.Paint
                 return;
 
             var key = new PartKey(ship.ShipId, part.Id);
+            var selection = GameServices.PaintSelection;
+            // A part with interior surfaces (station module): the face aimed at decides the side,
+            // unless "both sides" is chosen
+            bool both = false;
+            var ships = GameServices.ShipsClient;
+            if (ships != null && ships.TryGetTrackedShip(key.ShipId, out var tracked)
+                && tracked.TryGetFloatingPartVisual(key.PartId, out IShipPartVisual visual) && visual != null && PartTint.HasInterior(visual.GameObject))
+            {
+                both = selection != null && selection.PaintBothSides;
+                if (!both && FacesInside(hit, visual.GameObject))
+                    key = key.Interior;
+            }
             _hoveredPart = key;
 
             if (IsSpraying(__instance) && !key.Equals(_lastPainted))
             {
-                var selection = GameServices.PaintSelection;
                 if (selection == null)
                     return;
+                if (both && !Camouflage.Enabled)
+                    PaintNet.RequestPaint(key.Interior, PaintBrush.Current, selection.ReplaceAllIdenticalColors);
                 if (Camouflage.Enabled)
                 {
                     // The part's center in ship space picks its camouflage color
@@ -80,6 +93,26 @@ namespace StellarDriveDemoTF.Paint
                 }
                 _lastPainted = key;
             }
+        }
+
+        // A face looking toward the middle of the part's interior surfaces is an inside face
+        private static bool FacesInside(RaycastHit hit, GameObject visual)
+        {
+            Bounds? inside = null;
+            foreach (Renderer renderer in visual.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!PartTint.IsInterior(renderer))
+                    continue;
+                if (inside.HasValue)
+                {
+                    Bounds b = inside.Value;
+                    b.Encapsulate(renderer.bounds);
+                    inside = b;
+                }
+                else
+                    inside = renderer.bounds;
+            }
+            return inside.HasValue && Vector3.Dot(hit.normal, hit.point - inside.Value.center) < 0f;
         }
 
         // A new click may repaint the part painted by the previous one
@@ -198,7 +231,7 @@ namespace StellarDriveDemoTF.Paint
         private static void Postfix(ShipPartVisuals __instance, StatefulPart part)
         {
             var key = new PartKey(__instance.ShipId, part.Id);
-            if (!PaintNet.Client.TryGet(key, out _))
+            if (!PaintNet.Client.TryGet(key, out _) && !PaintNet.Client.TryGet(key.Interior, out _))
                 return;
             if (__instance.TryGetFloatingPartVisual(part.Id, out IShipPartVisual visual) && visual != null)
                 PartTint.Apply(visual.GameObject, key);

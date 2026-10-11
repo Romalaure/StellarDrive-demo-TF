@@ -111,7 +111,7 @@ namespace StellarDriveDemoTF.Paint
                 return;
             foreach (PartKey key in PaintNet.Server.All.Select(e => e.Key).ToList())
             {
-                if (!ships.TryGetStatefulPart(new PartContext(key.ShipId, key.PartId), out _))
+                if (!ships.TryGetStatefulPart(new PartContext(key.ShipId, key.RealPartId), out _))
                     PaintNet.Server.Remove(key);
             }
         }

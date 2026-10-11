@@ -576,7 +576,7 @@ namespace StellarDriveDemoTF.Paint
             if (PaintToolPatches.HoveringHull)
                 return Camouflage.Enabled ? "> Mur / sol — camouflage" : "> Mur / sol — couleur";
             if (PaintToolPatches.HoveredPart.HasValue)
-                return "> Pièce — couleur + finition";
+                return PaintToolPatches.HoveredPart.Value.IsInterior ? "> Pièce — intérieur (couleur + finition)" : "> Pièce — couleur + finition";
             return "> Aucune cible";
         }
 

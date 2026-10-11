@@ -1,3 +1,4 @@
+using System.Linq;
 using Ships.Parts.Common.Model.Reactions;
 using StellarDriveDemoTF.Common;
 using UnityEngine;
@@ -34,26 +35,37 @@ namespace StellarDriveDemoTF.Paint
             var ships = GameServices.ShipsClient;
             if (ships == null || !ships.TryGetTrackedShip(key.ShipId, out var ship))
                 return;
-            if (!ship.TryGetFloatingPartVisual(key.PartId, out IShipPartVisual visual) || visual == null)
+            if (!ship.TryGetFloatingPartVisual(key.RealPartId, out IShipPartVisual visual) || visual == null)
                 return;
             Apply(visual.GameObject, key);
         }
+
+        /// <summary>Interior renderers: they take the part's interior color.</summary>
+        public static bool IsInterior(Renderer renderer) => renderer.gameObject.name.Contains("TF_PaintInner");
+
+        /// <summary>Whether the part has interior surfaces with a color of their own.</summary>
+        public static bool HasInterior(GameObject root) => root != null && root.GetComponentsInChildren<Renderer>(true).Any(IsInterior);
 
         public static void Apply(GameObject root, PartKey key)
         {
             if (root == null)
                 return;
-            if (PaintNet.Client.TryGet(key, out PaintData paint))
-                Apply(root, paint);
-            else
-                Clear(root);
+            bool outside = PaintNet.Client.TryGet(key.Exterior, out PaintData outer);
+            bool inside = PaintNet.Client.TryGet(key.Interior, out PaintData inner);
+            foreach (Renderer renderer in Paintable(root))
+            {
+                bool interior = IsInterior(renderer);
+                if (interior ? inside : outside)
+                    Apply(renderer, interior ? inner : outer);
+                else
+                    Clear(renderer);
+            }
         }
 
-        private static void Apply(GameObject root, PaintData paint)
+        private static void Apply(Renderer renderer, PaintData paint)
         {
             Color color = paint.Color;
             PaintFinish finish = paint.Finish;
-            foreach (Renderer renderer in Paintable(root))
             {
                 Material[] materials = renderer.sharedMaterials;
                 for (int i = 0; i < materials.Length; i++)
@@ -85,17 +97,14 @@ namespace StellarDriveDemoTF.Paint
             }
         }
 
-        private static void Clear(GameObject root)
+        private static void Clear(Renderer renderer)
         {
             Block.Clear();
-            foreach (Renderer renderer in Paintable(root))
+            Material[] materials = renderer.sharedMaterials;
+            for (int i = 0; i < materials.Length; i++)
             {
-                Material[] materials = renderer.sharedMaterials;
-                for (int i = 0; i < materials.Length; i++)
-                {
-                    if (IsPaintable(materials[i]))
-                        renderer.SetPropertyBlock(Block, i);
-                }
+                if (IsPaintable(materials[i]))
+                    renderer.SetPropertyBlock(Block, i);
             }
         }
 
