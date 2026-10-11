@@ -43,6 +43,18 @@ namespace StellarDriveDemoTF.Paint
         /// <summary>Interior renderers: they take the part's interior color.</summary>
         public static bool IsInterior(Renderer renderer) => renderer.gameObject.name.Contains("TF_PaintInner");
 
+        private static readonly System.Text.RegularExpressions.Regex VariantName = new System.Text.RegularExpressions.Regex(@"TF_MatVariant_(\d+)_");
+
+        /// <summary>The material variant a renderer belongs to, -1 for none.</summary>
+        public static int Variant(Renderer renderer)
+        {
+            var match = VariantName.Match(renderer.gameObject.name);
+            return match.Success ? int.Parse(match.Groups[1].Value) : -1;
+        }
+
+        private static bool HasVariant(GameObject root, int variant, bool interior) =>
+            root.GetComponentsInChildren<Renderer>(true).Any(r => Variant(r) == variant && IsInterior(r) == interior);
+
         /// <summary>Whether the part has interior surfaces with a color of their own.</summary>
         public static bool HasInterior(GameObject root) => root != null && root.GetComponentsInChildren<Renderer>(true).Any(IsInterior);
 
@@ -52,6 +64,16 @@ namespace StellarDriveDemoTF.Paint
                 return;
             bool outside = PaintNet.Client.TryGet(key.Exterior, out PaintData outer);
             bool inside = PaintNet.Client.TryGet(key.Interior, out PaintData inner);
+            // Parts built in several materials: only the chosen variant of each side is drawn
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                int variant = Variant(renderer);
+                if (variant < 0)
+                    continue;
+                bool interior = IsInterior(renderer);
+                int chosen = interior ? (inside ? inner.Material : 0) : (outside ? outer.Material : 0);
+                renderer.enabled = variant == chosen || (variant == 0 && !HasVariant(root, chosen, interior));
+            }
             foreach (Renderer renderer in Paintable(root))
             {
                 bool interior = IsInterior(renderer);

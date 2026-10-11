@@ -62,6 +62,8 @@ namespace StellarDriveDemoTF.Paint
         private static bool _loaded;
 
         public static PaintFinish Finish = PaintFinish.None;
+        /// <summary>Material variant of the parts built in several materials (0: their own look).</summary>
+        public static byte Material;
         public static readonly List<PaintPreset> Presets = new List<PaintPreset>();
 
         /// <summary>The paint a click applies right now.</summary>
@@ -71,7 +73,7 @@ namespace StellarDriveDemoTF.Paint
             {
                 var selection = GameServices.PaintSelection;
                 Color color = selection != null ? selection.SelectedPaintColor : Color.white;
-                return new PaintData(PaintNet.ToColor32(color), Finish);
+                return new PaintData(PaintNet.ToColor32(color), Finish, Material);
             }
         }
 
@@ -81,7 +83,7 @@ namespace StellarDriveDemoTF.Paint
             PaintData current = Current;
             if (!Camouflage.Enabled)
                 return current;
-            return new PaintData(PaintNet.ToColor32(Camouflage.ColorAt(shipPosition, (Color)current.Color)), Finish);
+            return new PaintData(PaintNet.ToColor32(Camouflage.ColorAt(shipPosition, (Color)current.Color)), Finish, Material);
         }
 
         public static void EnsureLoaded()

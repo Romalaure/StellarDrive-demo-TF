@@ -159,6 +159,7 @@ namespace StellarDriveDemoTF.Paint
                 DrawQuickColors(selection);
             }
             DrawSides(selection);
+            DrawMaterial();
             DrawFinish();
             DrawPresets(selection);
 
@@ -379,6 +380,28 @@ namespace StellarDriveDemoTF.Paint
             GUILayout.Space(4f);
             selection.ReplaceAllIdenticalColors = GUILayout.Toggle(selection.ReplaceAllIdenticalColors, "  Remplacer toute la même couleur", _toggle);
             GUILayout.Label("Face visée : peins un côté, retourne-toi, peins l'autre d'une autre couleur.", _muted);
+        }
+
+        // Material variants of the parts built in several materials (TF Advanced station modules)
+        private static readonly string[] Materials = { "D'origine", "Métal", "Bois", "Métal sombre", "Blanc", "Verre" };
+
+        private static void DrawMaterial()
+        {
+            SectionHeader("Matériau — modules de station");
+            for (int start = 0; start < Materials.Length; start += 3)
+            {
+                GUILayout.BeginHorizontal();
+                for (int i = start; i < Mathf.Min(start + 3, Materials.Length); i++)
+                {
+                    bool active = PaintBrush.Material == i;
+                    if (GUILayout.Button(Materials[i], active ? _chipActiveStyle : _chipStyle, GUILayout.Height(26f)))
+                        PaintBrush.Material = (byte)i;
+                    if (i < start + 2)
+                        GUILayout.Space(5f);
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.Space(5f);
+            }
         }
 
         private static void DrawFinish()

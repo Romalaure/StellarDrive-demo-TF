@@ -132,6 +132,7 @@ namespace StellarDriveDemoTF.Paint
             {
                 selection.SelectedPaintColor = paint.Color;
                 PaintBrush.Finish = paint.Finish;
+                PaintBrush.Material = paint.Material;
             }
         }
 

@@ -19,8 +19,8 @@ namespace StellarDriveDemoTF.Paint
     internal static class PaintPersistence
     {
         private const string FileName = "tf-paint.json";
-        // 1: color only; 2: optional finish
-        private const int FormatVersion = 2;
+        // 1: color only; 2: optional finish; 3: optional material
+        private const int FormatVersion = 3;
 
         private sealed class SaveFile
         {
@@ -35,6 +35,8 @@ namespace StellarDriveDemoTF.Paint
             public string color;
             [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
             public SavedFinish finish;
+            [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+            public byte? material;
         }
 
         private sealed class SavedFinish
@@ -59,7 +61,8 @@ namespace StellarDriveDemoTF.Paint
                         color = "#" + ColorUtility.ToHtmlStringRGB(e.Value.Color),
                         finish = e.Value.Finish.Enabled
                             ? new SavedFinish { gloss = e.Value.Finish.Gloss, metal = e.Value.Finish.Metal, glow = e.Value.Finish.Glow }
-                            : null
+                            : null,
+                        material = e.Value.Material > 0 ? e.Value.Material : (byte?)null
                     })
                     .ToList()
             };
@@ -98,7 +101,7 @@ namespace StellarDriveDemoTF.Paint
                 PaintFinish finish = saved.finish == null
                     ? PaintFinish.None
                     : new PaintFinish { Enabled = true, Gloss = saved.finish.gloss, Metal = saved.finish.metal, Glow = saved.finish.glow };
-                PaintNet.Server.Set(new PartKey(saved.ship, saved.part), new PaintData(color, finish));
+                PaintNet.Server.Set(new PartKey(saved.ship, saved.part), new PaintData(color, finish, saved.material ?? 0));
             }
             TFMod.Log.Msg($"loaded {PaintNet.Server.Count} painted part(s)");
         }

@@ -290,6 +290,7 @@ namespace StellarDriveDemoTF.Paint
             writer.WriteUInt8Unpacked(paint.Finish.Gloss);
             writer.WriteUInt8Unpacked(paint.Finish.Metal);
             writer.WriteUInt8Unpacked(paint.Finish.Glow);
+            writer.WriteUInt8Unpacked(paint.Material);
         }
 
         private static PaintData ReadPaint(Reader reader)
@@ -302,7 +303,7 @@ namespace StellarDriveDemoTF.Paint
                 Metal = reader.ReadUInt8Unpacked(),
                 Glow = reader.ReadUInt8Unpacked()
             };
-            return new PaintData(color, finish);
+            return new PaintData(color, finish, reader.ReadUInt8Unpacked());
         }
 
         /// <summary>Same byte conversion the game uses for hull paint.</summary>

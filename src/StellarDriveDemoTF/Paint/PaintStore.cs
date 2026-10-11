@@ -70,15 +70,21 @@ namespace StellarDriveDemoTF.Paint
     {
         public Color32 Color;
         public PaintFinish Finish;
+        /// <summary>
+        /// For parts built in several materials (renderers named "TF_MatVariant_N_", like the TF
+        /// Advanced station modules): the variant shown. 0 is the part's own look.
+        /// </summary>
+        public byte Material;
 
-        public PaintData(Color32 color, PaintFinish finish)
+        public PaintData(Color32 color, PaintFinish finish, byte material = 0)
         {
             Color = color;
             Finish = finish;
+            Material = material;
         }
 
         public bool SameAs(PaintData other) =>
-            Color.r == other.Color.r && Color.g == other.Color.g && Color.b == other.Color.b && Finish.Equals(other.Finish);
+            Color.r == other.Color.r && Color.g == other.Color.g && Color.b == other.Color.b && Finish.Equals(other.Finish) && Material == other.Material;
     }
 
     /// <summary>Paint of every painted floating part (doors, machines, ...). Unpainted parts are absent.</summary>
