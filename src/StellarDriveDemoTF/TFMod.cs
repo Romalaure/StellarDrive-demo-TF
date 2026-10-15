@@ -6,7 +6,7 @@ using StellarDriveDemoTF;
 using StellarDriveDemoTF.Common;
 using StellarDriveDemoTF.Paint;
 
-[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.14.0", "Romalaure")]
+[assembly: MelonInfo(typeof(TFMod), "StellarDrive Demo TF", "0.15.0", "Romalaure")]
 [assembly: MelonGame("CuriousOwlGames", "StellarDrive")]
 [assembly: MelonOptionalDependencies("SDModKit")]
 [assembly: HarmonyDontPatchAll]
@@ -17,6 +17,22 @@ namespace StellarDriveDemoTF
     {
         internal static MelonLogger.Instance Log { get; private set; }
 
+        /// <summary>
+        /// The lamps, the camera and its tablet, the teleport capsule, the radio, the tool rack and
+        /// the infinite parts moved to StellarDrive Demo TF Advanced (0.18 and later): when it is
+        /// installed, this mod leaves them to it (same part ids, worlds keep them).
+        /// </summary>
+        internal static bool ObjectsMoved { get; } = AppDomain.CurrentDomain.GetAssemblies()
+            .Any(a => a.GetName().Name == "StellarDriveDemoTFAdvanced" && a.GetType("StellarDriveDemoTFAdvanced.TFItems.TFItemsMod") != null);
+
+        // Patch classes of the moved objects (skipped when they moved)
+        private static readonly string[] MovedPatches =
+        {
+            "InfiniteDefaultStatePatch", "InfiniteMassPatch", "InfiniteGeneratorPatch", "InfiniteTankPatch", "InfiniteChestPatch",
+            "InfiniteChestStatePatch", "InfiniteChestReadServerPatch", "InfiniteChestReadClientPatch", "InfiniteUnlockPatch",
+            "HullChunkLightingPatch", "WorldDataSavePatch", "WorldDataLoadPatch"
+        };
+
         public override void OnInitializeMelon()
         {
             Log = LoggerInstance;
@@ -24,8 +40,13 @@ namespace StellarDriveDemoTF
             ApplyPatches();
             PaintNet.InstallSerializers();
             TFNet.InstallSerializers();
-            Devices.TeleportCapsule.Install();
-            Devices.Radio.Install();
+            if (ObjectsMoved)
+                Log.Msg("the lamps, camera, teleport capsule, radio, tool rack and infinite parts are provided by StellarDrive Demo TF Advanced");
+            else
+            {
+                Devices.TeleportCapsule.Install();
+                Devices.Radio.Install();
+            }
             Devices.Schematics.Install();
             Devices.Outfits.Install();
             Devices.ToolRack.Install();
@@ -47,6 +68,8 @@ namespace StellarDriveDemoTF
             int applied = 0, failed = 0;
             foreach (Type type in types.Where(t => t.GetCustomAttributes(typeof(HarmonyLib.HarmonyPatch), false).Length > 0))
             {
+                if (ObjectsMoved && Array.IndexOf(MovedPatches, type.Name) >= 0)
+                    continue;
                 try
                 {
                     HarmonyInstance.CreateClassProcessor(type).Patch();
@@ -74,14 +97,17 @@ namespace StellarDriveDemoTF
         private static void RegisterParts()
         {
             Try("the TF build tab", Common.TFTab.Declare);
-            Try("lamps", Lights.LampParts.Register);
-            Try("the camera", Cameras.CameraParts.Register);
+            if (!ObjectsMoved)
+            {
+                Try("lamps", Lights.LampParts.Register);
+                Try("the camera", Cameras.CameraParts.Register);
+                Try("infinite parts", Infinite.InfiniteParts.Register);
+                Try("the teleport capsule", Devices.TeleportCapsule.Register);
+                Try("the radio", Devices.Radio.Register);
+                Try("the tool rack", Devices.ToolRack.Register);
+            }
             Try("chairs", Chairs.ChairParts.Register);
-            Try("infinite parts", Infinite.InfiniteParts.Register);
-            Try("the teleport capsule", Devices.TeleportCapsule.Register);
-            Try("the radio", Devices.Radio.Register);
             Try("the wardrobe", Devices.Wardrobe.Register);
-            Try("the tool rack", Devices.ToolRack.Register);
             Try("horizontal docking doors", Devices.HullDoors.Register);
         }
 
@@ -109,11 +135,13 @@ namespace StellarDriveDemoTF
             PaintNet.Update();
             PaintHud.Update();
             GameDump.Update();
-            Cameras.CameraTablet.Update();
+            if (!ObjectsMoved)
+                Cameras.CameraTablet.Update();
             TFNet.Update();
             UsableParts.Update();
             Devices.Outfits.Update();
-            Devices.RadioSound.Update();
+            if (!ObjectsMoved)
+                Devices.RadioSound.Update();
             Devices.ThirdPerson.Update();
             Devices.SchematicTablet.Update();
             Devices.RotorCheck.Update();
@@ -122,16 +150,20 @@ namespace StellarDriveDemoTF
 
         public override void OnLateUpdate()
         {
-            Cameras.CameraTablet.LateUpdate();
+            if (!ObjectsMoved)
+                Cameras.CameraTablet.LateUpdate();
         }
 
         public override void OnGUI()
         {
             PaintHud.Draw();
-            Cameras.CameraTablet.Draw();
+            if (!ObjectsMoved)
+            {
+                Cameras.CameraTablet.Draw();
+                Devices.TeleportMenu.Draw();
+                Devices.RadioMenu.Draw();
+            }
             UsableParts.Draw();
-            Devices.TeleportMenu.Draw();
-            Devices.RadioMenu.Draw();
             Devices.WardrobeMenu.Draw();
             Devices.SchematicsMenu.Draw();
             Devices.ToolRackMenu.Draw();

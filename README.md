@@ -1,5 +1,7 @@
 # StellarDrive Demo TF
 
+> **0.15** : les luminaires, la caméra et sa tablette, la capsule de téléportation, la radio, le râtelier à outils et les objets infinis sont maintenant dans [StellarDrive Demo TF Advanced](https://github.com/Romalaure/StellarDrive-demo-TF-advanced) (0.18 et plus, onglet « TF Équipement », mêmes pièces). Avec TF Advanced installé, ce mod les lui laisse ; sans lui, ce mod les garde.
+
 MelonLoader mod for the StellarDrive demo, installable with [StellarModManager](https://github.com/jollyname/StellarModManager).
 
 ## Features

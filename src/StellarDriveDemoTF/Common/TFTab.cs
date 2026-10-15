@@ -26,6 +26,7 @@ namespace StellarDriveDemoTF.Common
         public static void Declare()
         {
             BuildTabs.Declare(Name, 50, LampIcon.Create());
+            // (with TF Advanced, the lamps and devices are in its "TF Équipement" tab)
             BuildTabs.Declare(ObjectsName, 51, LampIcon.Create());
         }
     }

@@ -163,7 +163,8 @@ namespace StellarDriveDemoTF.Common
 
         private static void EnsureHandlers()
         {
-            NetworkManager network = InstanceFinder.NetworkManager;
+            // (InstanceFinder.NetworkManager logs a line each call while there is none, as in the menu)
+            NetworkManager network = (FishNet.Managing.NetworkManager.Instances.Count > 0 ? FishNet.Managing.NetworkManager.Instances[0] : null);
             if (network == _network)
                 return;
             if (_network != null)
